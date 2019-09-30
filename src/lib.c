@@ -20,6 +20,8 @@ FILA2 Q_Blocked; // Processes blocked and waiting sync.
 FILA2 Q_Exec; // Process[es] running at a given time.
 // Suspended states necessary?
 
+FILA2 QQ_Teste; // isso é uma futura fila de filas para Ready
+
 // Notação:
 // [glm] SUGESTÕES:
 // threads começam com t_coisa
@@ -33,7 +35,8 @@ void set_exec(TCB_t* p_thread) {
 	t_a_bola_da_vez = p_thread;
 	// OBS:
 	// [glm] Não sei se isso vai dar bom
-	// pq tem que cuidar da thread antiga que tava em exec /glm
+	// pq tem que cuidar da thread antiga que tava em exec.
+	// originalmente só criei para deixar a init mais bonita /glm
 }
 
 int generate_tid() {
@@ -50,6 +53,9 @@ void init_lib() {
 	if (CreateFila2(&Q_Exec) != SUCCESS)
 		printf("ERROR: Could not initialize exec queue\n");
 
+	if (CreateFila2(&QQ_Teste) != SUCCESS)
+			printf("ERROR: deu ruim no meu teste \n");
+
 		t_main.tid = 0;
 		t_main.prio = DEFAULT_PRIO;
 		getcontext(&(t_main.context));
@@ -61,6 +67,79 @@ void init_lib() {
 
 		return;
 }
+int insert_if_same_prio_as_thread(PFILA2 a, TCB_t* b) {
+	//dummy
+	return 1;
+}
+int teste(PFILA2 p_fila2, TCB_t* p_thread) {
+	int code;
+	if (FirstFila2(p_fila2) != SUCCESS) {
+		// CASE: SUPERFICIAL QUEUE EMPTY
+		// Must create new FCFS subqueue and insert thread there.
+		if (NextFila2(p_fila2) == NXTFILA_VAZIA) {
+			PFILA2 p_fcfs;
+			if(CreateFila2(p_fcfs) == SUCCESS) {
+				if(AppendFila2(p_fcfs,p_thread) == SUCCESS) {
+					// Created sub-queue for the priority in p_thread.
+					// Inserted p_thread as sole element so far.
+					return SUCCESS;
+				}
+				else {
+					printf("Vish: append upon create FCFS failed.\n");
+					free(p_fcfs);
+					return FAILED;
+				}
+			}
+			else {
+				printf("Vish: create FCFS failed.\n");
+				return FAILED;
+			}
+		}
+		// CASE: SUPERQUEUE INVALID
+		else {
+			printf("Vish: superfila deu invalida\n");
+			return FAILED;
+		}
+	}
+	// CASE: SUPERQUEUE IS VALID BUT NOT EMPTY.
+	// Must traverse to find correct priority FCFS, then append to the FCFS.
+	else {
+		PFILA2 p_cur_fcfs = GetAtIteratorFila2(p_fila2);
+		while( insert_if_same_prio_as_thread(p_cur_fcfs, p_thread) == FAILEDFORHAVINGWRONGPRIO) {
+				// obs. a principio, essa FCFS interno nunca pode estar empty entao n precisa testar nessa func,
+				// se estiver temos problemas maiores na parte de deletar threads da fila. /glm
+			code = NextFila2(p_fila2);
+			if(code == NXTFILA_ENDQUEUE) {
+				// Insert FCFS at end of Superqueue. (SAME CODE AS ABOVE FOR EMPTY)
+				PFILA2 p_fcfs;
+				if(CreateFila2(p_fcfs) == SUCCESS) {
+					if(AppendFila2(p_fcfs,p_thread) == SUCCESS) {
+						// Created sub-queue for the priority in p_thread.
+						// Inserted p_thread as sole element so far.
+						return SUCCESS;
+					}
+					else {
+						printf("Vish: append upon create FCFS failed.\n");
+						free(p_fcfs);
+						return FAILED;
+					}
+				}
+				else {
+					printf("Vish: create FCFS failed.\n");
+					return FAILED;
+				}
+			}
+			else if (code == NXTFILA_ITERINVAL || code == NXTFILA_VAZIA)
+				return FAILED;
+			else {
+				p_cur_fcfs = GetAtIteratorFila2(p_fila2);
+			}
+		}
+		//Inserted!
+		return SUCCESS;
+	}
+}
+
 
 int find_insert_position(PFILA2 p_queue, TCB_t* p_thread ) {
 
@@ -74,7 +153,7 @@ int find_insert_position(PFILA2 p_queue, TCB_t* p_thread ) {
 		}
 		else if (code == NXTFILA_VAZIA) {
 			//This bitch empty, YEET
-			if(AppendFila2(p_queue) != SUCCESS) {
+			if(AppendFila2(p_queue, p_thread) != SUCCESS) {
 				printf("Vish:[findinsert] erro no append em fila vazia ")
 				return FAILED;
 			}
@@ -88,13 +167,14 @@ int find_insert_position(PFILA2 p_queue, TCB_t* p_thread ) {
 
 		while( 	(p_current->prio <= p_thread->prio)
 				 && (NextFila2(p_queue) != NXTFILA_ENDQUEUE) ) {
-		// Traverse until changes priority to a worse one than p_queue's
-		// If not, NextFila2 already sets iterator to the next element
-		// and tests it has reached the end.
+		// Traverse the queue until it finds a worse priority (than p_thread).
+		// While it doesn't, calling NextFila2 sets iterator to the next element
+		// and tests whether it reached the end of the queue.
  			p_current = GetAtIteratorFila2(p_queue);
 		}
+		// Left the while loop. Two possibilities:
 		if(p_current->prio > p_thread->prio ) {
-			// First test on while failed, so IT points to
+			// First test on while failed, so itr points to
 			// the first element with worse priority
 			// -> Insert before current element!
 			code = InsertBeforeIteratorFila2(p_queue, p_thread) ;
@@ -104,7 +184,7 @@ int find_insert_position(PFILA2 p_queue, TCB_t* p_thread ) {
 		else {
 			// Failed at second conditional -> END
 			// Attempts to append the TCB to the END of the queue.
-			if(AppendFila2(p_queue) != SUCCESS) {
+			if(AppendFila2(p_queue,p_thread) != SUCCESS) {
 				printf("Vish:[findinsert] erro no append em fim de fila ")
 				return FAILED;
 			}
