@@ -17,7 +17,7 @@ BIN_DIR=./bin
 SRC_DIR=./src
 CFLAGS=-Wall -g
 
-#LIB=$(LIB_DIR)/libcthread.a
+LIB=$(LIB_DIR)/libcthread.a
 
 all: $(BIN_DIR)/cthread.o
 	ar -crs $(LIB) $^ $(BIN_DIR)/support.o
