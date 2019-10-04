@@ -71,29 +71,39 @@ int insert_if_same_prio_as_thread(PFILA2 a, TCB_t* b) {
 	//dummy
 	return 1;
 }
-int teste(PFILA2 p_fila2, TCB_t* p_thread) {
+
+PFILA2 instantiate_new_fcfs(TCB_t* p_thread) {
+	// p_thread is the founder of a new priority FCFS.
+	PFILA2 p_fcfs;
+	if(CreateFila2(p_fcfs) != SUCCESS) {
+		printf("Vish: create FCFS failed.\n");
+		return NULL;
+	}
+	else {
+		if(AppendFila2(p_fcfs,p_thread) != SUCCESS) {
+			printf("Vish: append upon create FCFS failed.\n");
+			free(p_fcfs);
+			return NULL;
+		}
+		else {
+			// Created sub-queue with FCFS regimen
+			// representing the priority in p_thread.
+			// Inserted p_thread as sole element so far.
+			return p_fcfs;
+		}
+	}
+}
+
+int emplace_superteste(PFILA2 p_fila2, TCB_t* p_thread) {
 	int code;
+
 	if (FirstFila2(p_fila2) != SUCCESS) {
 		// CASE: SUPERFICIAL QUEUE EMPTY
 		// Must create new FCFS subqueue and insert thread there.
 		if (NextFila2(p_fila2) == NXTFILA_VAZIA) {
-			PFILA2 p_fcfs;
-			if(CreateFila2(p_fcfs) == SUCCESS) {
-				if(AppendFila2(p_fcfs,p_thread) == SUCCESS) {
-					// Created sub-queue for the priority in p_thread.
-					// Inserted p_thread as sole element so far.
-					return SUCCESS;
-				}
-				else {
-					printf("Vish: append upon create FCFS failed.\n");
-					free(p_fcfs);
-					return FAILED;
-				}
-			}
-			else {
-				printf("Vish: create FCFS failed.\n");
-				return FAILED;
-			}
+			PFILA2 p_fcfs = instantiate_new_fcfs(p_thread);
+			//Attempts to append sub-queue to super if not null.
+			return (p_fcfs != NULL && AppendFila2(p_fila2, p_fcfs)==SUCCESS);
 		}
 		// CASE: SUPERQUEUE INVALID
 		else {
@@ -104,30 +114,17 @@ int teste(PFILA2 p_fila2, TCB_t* p_thread) {
 	// CASE: SUPERQUEUE IS VALID BUT NOT EMPTY.
 	// Must traverse to find correct priority FCFS, then append to the FCFS.
 	else {
+
+		//Essa parte nao deve ta certa; reescrever /glm
 		PFILA2 p_cur_fcfs = GetAtIteratorFila2(p_fila2);
 		while( insert_if_same_prio_as_thread(p_cur_fcfs, p_thread) == FAILEDFORHAVINGWRONGPRIO) {
 				// obs. a principio, essa FCFS interno nunca pode estar empty entao n precisa testar nessa func,
 				// se estiver temos problemas maiores na parte de deletar threads da fila. /glm
 			code = NextFila2(p_fila2);
 			if(code == NXTFILA_ENDQUEUE) {
-				// Insert FCFS at end of Superqueue. (SAME CODE AS ABOVE FOR EMPTY)
-				PFILA2 p_fcfs;
-				if(CreateFila2(p_fcfs) == SUCCESS) {
-					if(AppendFila2(p_fcfs,p_thread) == SUCCESS) {
-						// Created sub-queue for the priority in p_thread.
-						// Inserted p_thread as sole element so far.
-						return SUCCESS;
-					}
-					else {
-						printf("Vish: append upon create FCFS failed.\n");
-						free(p_fcfs);
-						return FAILED;
-					}
-				}
-				else {
-					printf("Vish: create FCFS failed.\n");
-					return FAILED;
-				}
+				// Insert FCFS at end of Superqueue.
+				PFILA2 p_fcfs = instantiate_new_fcfs(p_thread);
+				return (p_fcfs != NULL && AppendFila2(p_fila2, p_fcfs) == SUCCESS);
 			}
 			else if (code == NXTFILA_ITERINVAL || code == NXTFILA_VAZIA)
 				return FAILED;
@@ -141,7 +138,7 @@ int teste(PFILA2 p_fila2, TCB_t* p_thread) {
 }
 
 
-int find_insert_position(PFILA2 p_queue, TCB_t* p_thread ) {
+int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 
 	int code;
 	if(FirstFila2(p_queue) != SUCCESS) {
