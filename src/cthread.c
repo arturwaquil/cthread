@@ -1,7 +1,7 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <ucontext.h>
+#include <stdlib.h>
 #include "../include/support.h"
 #include "../include/cthread.h"
 #include "../include/cdata.h"
@@ -60,6 +60,12 @@ void* null(char* msg) {
 	printf("%s\n", msg);
 	return NULL;
 }
+PFILA2 init_fila2() {
+	return (PFILA2)malloc(sizeof(FILA2));
+}
+TCB_t* init_tcb() {
+	return (TCB_t*)malloc(sizeof(TCB_t));
+}
 
 void init_lib() {
 
@@ -84,10 +90,11 @@ int insert_if_same_prio_as_thread(PFILA2 a, TCB_t* b) {
 	//dummy
 	return 1;
 }
+int priority_level_at(PFILA2 queue) {return 1;};
 
 PFILA2 instantiate_new_fcfs(TCB_t* p_thread) {
 	// p_thread is the founder of a new priority FCFS.
-	PFILA2 p_fcfs;
+	PFILA2 p_fcfs = (struct sFila2*) init_fila2;
 	if(CreateFila2(p_fcfs) != SUCCESS) {
 		return(null("Failed to create a FCFS queue."));
 	}
@@ -122,14 +129,16 @@ int emplace_superteste(PFILA2 prio_queue, TCB_t* p_thread) {
 		//traverse_until_find_correct_spot
 		while (code != -NXTFILA_ENDQUEUE) {
 			if (priority_level_at(current_fcfs) == p_thread->prio) {
-				insert_thread(current_fcfs, p_thread);
-				return SUCCESS;
+				//insert_thread(current_fcfs, p_thread);
+				return(AppendFila2(current_fcfs, p_thread));
 			}
 			else if (priority_level_at(current_fcfs) > p_thread->prio) {
 				PFILA2 p_fcfs =instantiate_new_fcfs(p_thread);
 				//!!! insert new fcfs to prioqueue, between the surrounding priorities.
+				return(InsertBeforeIteratorFila2(prio_queue, p_fcfs));
 			}
 			else {
+				//iterate.
 				code = NextFila2(prio_queue);
 				current_fcfs = GetAtIteratorFila2(prio_queue);
 			}
@@ -191,6 +200,7 @@ int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 			else return SUCCESS;
 		}
 	}
+	return 0;
 }
 
 int ccreate (void* (*start)(void*), void *arg, int prio) {
@@ -199,7 +209,8 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 	p_thread->tid = generate_tid();
 	p_thread->state = PROCST_APTO;
 	p_thread->prio = DEFAULT_PRIO;
-	getcontext(&(p_thread->context));
+	//getcontext(&(p_thread->context));
+
 	// Fazer coisa de Contexto com a função passada pelo start,
 	// para o sistema da maq virtual rodar pra nós. /glm
 // OBS: Como inserir o novo na fila de ready? É Prioridade + FIFO
