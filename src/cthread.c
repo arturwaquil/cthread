@@ -122,17 +122,41 @@ int priority_at(PFILA2 queue) {
 	else return FAILED;
 }
 
-// Flattened queue
+void print_queue(PFILA2 p_queue) {
+	if (!is_valid(p_queue))
+		print("PRINT QUEUE Invalid priority queue");
+	else if (is_empty(p_queue)) {
+		print("PRINT QUEUE Empty queue");
+	}
+	else {
+		print("Printing queue...");
+		int count = 0;
+		int code = FirstFila2(p_queue);
+		TCB_t* p_current = GetAtIteratorFila2(p_queue);
+		while (code != -NXTFILA_ENDQUEUE) {
+			count ++ ;
+			printf("Item %d : prio %d, TID %d, state %d\n",
+				count, p_current->prio, p_current->tid, p_current->state);
+			code = NextFila2(p_queue);
+			p_current = GetAtIteratorFila2(p_queue);
+		}
+		// End queue.
+		print("PRINT QUEUE: Reached endqueue.");
+	}
+}
+
+
+// Queue insert
 int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 	int code;
 	if (!is_valid(p_queue))
 		return (failed("Invalid priority queue"));
 	else if (is_empty(p_queue)) {
-		//Attempts to append sub-queue to super if not null.
 		return AppendFila2(p_queue, p_thread);
 	}
 	// Queue not empty:
-	// traverse until last element with same priority (FIFO).
+	// traverse until priority becomes higher than new element,
+	// inserting before it. If end queue reached, append to the end.
 	else {
 		code = FirstFila2(p_queue);
 		TCB_t* p_current = GetAtIteratorFila2(p_queue);
@@ -258,14 +282,15 @@ int cyield(void) {
 }
 
 int cjoin(int tid) {
+	init();
 	return -1;
 }
 
 int csem_init(csem_t *sem, int count) {
+	init();
 
 	sem->count = count;
-	//FILA2 Q_Semaphore; ops ~como causar um segfault~
-	FILA2* p_semaphore = (FILA2*) malloc(sizeof(FILA2));
+	PFILA2 p_semaphore = alloc_queue();
 	if( CreateFila2(p_semaphore) != SUCCESS ) {
 		printf("ERROR: could not initialize semaphore queue\n");
 		sem->fila = NULL;
@@ -278,10 +303,12 @@ int csem_init(csem_t *sem, int count) {
 }
 
 int cwait(csem_t *sem) {
+	init();
 	return -1;
 }
 
 int csignal(csem_t *sem) {
+	init();
 	return -1;
 }
 
