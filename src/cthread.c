@@ -264,20 +264,15 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 	// para o sistema da maq virtual rodar pra nós. /glm
 	
 	//makecontext from ibm documentation
-	p_thread->uc_link=0;
-	if((context.uc_stack.ss_sp = (char *) malloc(STACK_SIZE)) != NULL) {
-		context.uc_stack.ss_size = STACK_SIZE;
-		context.uc_stack.ss_flags = 0;
-				errno = 0;
-		makecontext(&(p_thread->context), 1, arg)	
-				if(errno != 0) {
-					perror("Error reported by makecontext()");
-					return -1;         /* Error occurred exit */ 
-				}
+	p_thread->context.uc_link=0;
+	if((p_thread->context.uc_stack.ss_sp = (char *) malloc(STACK_SIZE)) != NULL) {
+		p_thread->context.uc_stack.ss_size = STACK_SIZE;
+		p_thread->context.uc_stack.ss_flags = 0;
+		makecontext(&(p_thread->context), (void*)&start, 1, arg);
 	}
 	else {
-		perror("not enough storage for stack");
-		abort();
+		printf("not enough storage for stack");
+		return FAILED;
 	}
 
 
