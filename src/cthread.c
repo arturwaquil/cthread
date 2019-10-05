@@ -7,6 +7,8 @@
 #include "../include/cthread.h"
 #include "../include/cdata.h"
 
+#define STACK_SIZE 16384
+
 #define DEFAULT_PRIO 0
 #define SUCCESS 0
 #define FAILED -1
@@ -250,6 +252,7 @@ TCB_t* make_thread(int prio) {
 	p_thread->state = PROCST_APTO;
 	p_thread->prio = prio;
 	getcontext(&(p_thread->context));
+
 	return p_thread;
 }
 
@@ -259,6 +262,24 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 	TCB_t* p_thread = make_thread(prio);
 	// Fazer coisa de Contexto com a função passada pelo start,
 	// para o sistema da maq virtual rodar pra nós. /glm
+	
+	//makecontext from ibm documentation
+	p_thread->uc_link=0;
+	if((context.uc_stack.ss_sp = (char *) malloc(STACK_SIZE)) != NULL) {
+		context.uc_stack.ss_size = STACK_SIZE;
+		context.uc_stack.ss_flags = 0;
+				errno = 0;
+		makecontext(&(p_thread->context), 1, arg)	
+				if(errno != 0) {
+					perror("Error reported by makecontext()");
+					return -1;         /* Error occurred exit */ 
+				}
+	}
+	else {
+		perror("not enough storage for stack");
+		abort();
+	}
+
 
 	int code = emplace_in_queue(&Q_Ready, p_thread );
 	printf("depois da emplace\n");
