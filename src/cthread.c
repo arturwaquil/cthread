@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 600
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -8,7 +10,23 @@
 #define DEFAULT_PRIO 0
 #define SUCCESS 0
 #define FAILED -1
-#define FAILEDFORHAVINGWRONGPRIO -1000
+void init();
+void initialize_cthread();
+void set_exec(TCB_t*);
+int generate_tid();
+int is_empty(PFILA2);
+int is_valid(PFILA2);
+int schedule_next_thread();
+int unschedule_current_thread();
+int emplace_in_queue(PFILA2, TCB_t*);
+int remove_from_queue(PFILA2, TCB_t*);
+TCB_t* pop_queue(PFILA2 p_queue);
+int failed(char* msg);
+void* null(char* msg);
+void print(char* msg);
+PFILA2 alloc_queue();
+TCB_t* alloc_thread();
+TCB_t* make_thread();
 
 int lib_initialized = 0;
 
@@ -21,9 +39,6 @@ int num_threads = 0; // Qty of thread instances; doubles as tid generator.
 FILA2 Q_Ready; // Processes ready to run when the CPU becomes available.
 FILA2 Q_Blocked; // Processes blocked and waiting sync.
 FILA2 Q_Exec; // Process[es] running at a given time.
-// Suspended states necessary?
-
-FILA2 QQ_Teste; // isso é uma futura fila de filas para Ready
 
 // Notação,SUGESTÕES:
 // threads começam com t_coisa, queues com Q_Coisa
@@ -57,22 +72,24 @@ int failed(char* msg) {
 	printf("%s\n", msg);
 	return FAILED;
 }
+void print(char* msg) {
+	printf("%s\n", msg);
+}
 void* null(char* msg) {
 	printf("%s\n", msg);
-	return NULL;
+	return (void*)NULL;
 }
-PFILA2 init_fila2() {
+PFILA2 alloc_queue() {
 	return (PFILA2)malloc(sizeof(FILA2));
 }
-TCB_t* init_tcb() {
+TCB_t* alloc_thread() {
 	return (TCB_t*)malloc(sizeof(TCB_t));
 }
+void initialize_cthread() {
 
-void init_lib() {
-
-	Q_Ready = *((PFILA2) malloc(sizeof(FILA2)));
-	Q_Blocked = *((PFILA2) malloc(sizeof(FILA2)));
-	Q_Exec = *((PFILA2) malloc(sizeof(FILA2)));
+	Q_Ready 	=  *alloc_queue();
+	Q_Blocked =  *alloc_queue();
+	Q_Exec	  =  *alloc_queue();
 
 	if (CreateFila2(&Q_Ready) != SUCCESS)
 		printf("ERROR: Could not initialize ready queue\n");
@@ -81,61 +98,33 @@ void init_lib() {
 	if (CreateFila2(&Q_Exec) != SUCCESS)
 		printf("ERROR: Could not initialize exec queue\n");
 
-	if (CreateFila2(&QQ_Teste) != SUCCESS)
-			printf("ERROR: deu ruim no meu teste \n");
-
 		t_main.tid = 0;
 		t_main.prio = DEFAULT_PRIO;
-		//getcontext(&(t_main.context));
+		getcontext(&(t_main.context));
 		set_exec(&t_main);
 		// não acabou
 		return;
 }
-int insert_if_same_prio_as_thread(PFILA2 a, TCB_t* b) {
-	//dummy
-	return 1;
+
+void init() {
+	if (!lib_initialized){
+		initialize_cthread();
+		lib_initialized = 1;
+	}
 }
-int priority_level_at(PFILA2 queue) {
 
+int priority_at(PFILA2 queue) {
 	TCB_t* p = GetAtIteratorFila2(queue);
-
 	if(p !=NULL ) {
 		int prio = p->prio;
 		return prio;
 	}
 	else return FAILED;
-
 }
 
-PFILA2 instantiate_new_fcfs(TCB_t* p_thread) {
-	printf("i1\n");
-	// p_thread is the founder of a new priority FCFS.
-	PFILA2 p_fcfs = (struct sFila2*) init_fila2();
-	printf("i2\n");
-	if(CreateFila2(p_fcfs) != SUCCESS) {
-	printf("pfvrsejaaqui\n");
-		return(null("Failed to create a FCFS queue."));
-	}
-	else {
-	printf("i3\n");
-		if(AppendFila2(p_fcfs,p_thread) != SUCCESS) {
-			free(p_fcfs);
-			return(null("Failed to append TCB to FCFS queue."));
-		}
-		else {
-	printf("i4\n");
-			// Created sub-queue with FCFS regimen representing the priority in p_thread.
-			// Inserted p_thread as sole element so far.
-			return p_fcfs;
-		}
-	}
-}
-
-//old version, flattened queue.
+// Flattened queue
 int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 	int code;
-
-
 	if (!is_valid(p_queue))
 		return (failed("Invalid priority queue"));
 	else if (is_empty(p_queue)) {
@@ -147,9 +136,7 @@ int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 	else {
 		code = FirstFila2(p_queue);
 		TCB_t* p_current = GetAtIteratorFila2(p_queue);
-
 		while (code != -NXTFILA_ENDQUEUE) {
-			
 			if (p_current->prio > p_thread->prio) {
 				return InsertBeforeIteratorFila2(p_queue, p_thread);
 			}
@@ -158,30 +145,70 @@ int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 				p_current = GetAtIteratorFila2(p_queue);
 			}
 		}
+		// END QUEUE
+		return AppendFila2(p_queue, p_thread);
 	}
-	return 0;
 }
 
-int ccreate (void* (*start)(void*), void *arg, int prio) {
-	// NOTE: argument "prio" ignored; defaults to zero upon creation
-
-	if (!lib_initialized)
-	{
-		init_lib();
-		lib_initialized = 1;
+int remove_from_queue(PFILA2 p_queue, TCB_t* p_thread) {
+	int code ;
+	if (!is_valid(p_queue))
+		return (failed("Invalid priority queue"));
+	else if (is_empty(p_queue)) {
+		return (failed("Empty queue: nothing to remove"));
 	}
+	else {
+		code = FirstFila2(p_queue);
+		TCB_t* p_current = GetAtIteratorFila2(p_queue);
+		while (code != -NXTFILA_ENDQUEUE) {
+			if (p_current->tid == p_thread->tid) {
+				print("Achou thread, removendo");
+				return DeleteAtIteratorFila2(p_queue);
+			}
+			else {
+				code = NextFila2(p_queue);
+				p_current = GetAtIteratorFila2(p_queue);
+			}
+		}
+		// END QUEUE
+		return failed("Thread not found in queue for removal.");
+	}
+}
 
+TCB_t* pop_queue(PFILA2 p_queue) {
+	int code;
+	TCB_t* p_thread;
+	if (!is_valid(p_queue))
+		return (null("Invalid priority queue"));
+	else if (is_empty(p_queue)) {
+		return (null("Empty queue: nothing to pop"));
+	}
+	else {
+		code = FirstFila2(p_queue);
+		p_thread = GetAtIteratorFila2(p_queue);
+		if(DeleteAtIteratorFila2(p_queue) != SUCCESS) {
+			return(null("Failed to pop thread from queue"));
+		}
+		else return p_thread;
+	}
+}
 
-	TCB_t* p_thread = (TCB_t*) malloc(sizeof(TCB_t));
+TCB_t* make_thread() {
+
+	TCB_t* p_thread = alloc_thread();
 	p_thread->tid = generate_tid();
 	p_thread->state = PROCST_APTO;
 	p_thread->prio = DEFAULT_PRIO;
 	getcontext(&(p_thread->context));
+	return p_thread;
+}
 
+int ccreate (void* (*start)(void*), void *arg, int prio) {
+	// NOTE: argument "prio" ignored; defaults to zero upon creation
+	init();
+	TCB_t* p_thread = make_thread();
 	// Fazer coisa de Contexto com a função passada pelo start,
 	// para o sistema da maq virtual rodar pra nós. /glm
-// OBS: Como inserir o novo na fila de ready? É Prioridade + FIFO
-// Encontrar o último com prio 0 e inserir ali? /glm
 
 	int code = emplace_in_queue(&Q_Ready, p_thread );
 	printf("depois da emplace\n");
@@ -194,8 +221,40 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 		return p_thread->tid;
 }
 
+int schedule_next_thread() {
+	t_a_bola_da_vez = pop_queue(&Q_Ready) ;
+	if(t_a_bola_da_vez != NULL ) {
+		t_a_bola_da_vez->state = PROCST_EXEC;
+		if (emplace_in_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
+			t_a_bola_da_vez->state = PROCST_EXEC;
+			startTimer();
+			return SUCCESS;
+		}
+		else
+			return failed("Did not promote next thread ready->exec");
+	}
+	else
+		return failed("Did not select next thread ready->exec");
+}
+
+int unschedule_current_thread() {
+	t_a_bola_da_vez->prio = stopTimer();
+	if(remove_from_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
+		if(emplace_in_queue(&Q_Ready, t_a_bola_da_vez) == SUCCESS) {
+			t_a_bola_da_vez->state = PROCST_APTO;
+			return SUCCESS;
+		}
+		return FAILED;
+	}
+	else return FAILED;
+}
+
 int cyield(void) {
-	return -1;
+	// Yield takes the executing thread from the EXEC queue,
+	// and places it into the ready queue with state = ready;
+	// Then it calls the scheduler to promote another thread to EXEC.
+	return unschedule_current_thread() + schedule_next_thread() ;
+	// Isso eh naughty d+ e provavelmente vou mudar /glm
 }
 
 int cjoin(int tid) {
