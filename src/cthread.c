@@ -26,7 +26,7 @@ void* null(char* msg);
 void print(char* msg);
 PFILA2 alloc_queue();
 TCB_t* alloc_thread();
-TCB_t* make_thread();
+TCB_t* make_thread(int);
 
 int lib_initialized = 0;
 
@@ -199,6 +199,32 @@ int remove_from_queue(PFILA2 p_queue, TCB_t* p_thread) {
 	}
 }
 
+
+int removeByTID(PFILA2 p_queue, int tid) {
+	int code ;
+	if (!is_valid(p_queue))
+		return (failed("Invalid priority queue"));
+	else if (is_empty(p_queue)) {
+		return (failed("Empty queue: nothing to remove"));
+	}
+	else {
+		code = FirstFila2(p_queue);
+		TCB_t* p_current = GetAtIteratorFila2(p_queue);
+		while (code != -NXTFILA_ENDQUEUE) {
+			if (p_current->tid == tid) {
+				print("Achou tid, removendo");
+				return DeleteAtIteratorFila2(p_queue);
+			}
+			else {
+				code = NextFila2(p_queue);
+				p_current = GetAtIteratorFila2(p_queue);
+			}
+		}
+		// END QUEUE
+		return failed("Tid not found in queue for removal.");
+	}
+}
+
 TCB_t* pop_queue(PFILA2 p_queue) {
 	int code;
 	TCB_t* p_thread;
@@ -217,12 +243,12 @@ TCB_t* pop_queue(PFILA2 p_queue) {
 	}
 }
 
-TCB_t* make_thread() {
+TCB_t* make_thread(int prio) {
 
 	TCB_t* p_thread = alloc_thread();
 	p_thread->tid = generate_tid();
 	p_thread->state = PROCST_APTO;
-	p_thread->prio = DEFAULT_PRIO;
+	p_thread->prio = prio;
 	getcontext(&(p_thread->context));
 	return p_thread;
 }
@@ -230,7 +256,7 @@ TCB_t* make_thread() {
 int ccreate (void* (*start)(void*), void *arg, int prio) {
 	// NOTE: argument "prio" ignored; defaults to zero upon creation
 	init();
-	TCB_t* p_thread = make_thread();
+	TCB_t* p_thread = make_thread(prio);
 	// Fazer coisa de Contexto com a função passada pelo start,
 	// para o sistema da maq virtual rodar pra nós. /glm
 
@@ -241,8 +267,11 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 		free(p_thread);
 		return FAILED;
 	}
-	else
+	else {
+		print("ok retornando tid\n");
+		print_queue(&Q_Ready);
 		return p_thread->tid;
+	}
 }
 
 int schedule_next_thread() {
@@ -272,6 +301,26 @@ int unschedule_current_thread() {
 	}
 	else return FAILED;
 }
+
+int cpop_ready() {
+	TCB_t* thread = pop_queue(&Q_Ready);
+	if (thread != NULL)
+	{	
+		print_queue(&Q_Ready);
+		return thread->tid; 
+	}
+	else return -1;
+}
+
+void cremove_ready(int tid) {
+printf("\nCalled removal of tid %d\n",tid);	
+removeByTID(&Q_Ready, tid);
+
+print("Queue after call to remove element: ");
+print_queue(&Q_Ready); 
+printf("\n");
+}
+
 
 int cyield(void) {
 	// Yield takes the executing thread from the EXEC queue,
