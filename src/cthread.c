@@ -12,6 +12,7 @@
 #define DEFAULT_PRIO 0
 #define SUCCESS 0
 #define FAILED -1
+
 void init();
 void initialize_cthread();
 void set_exec(TCB_t*);
@@ -33,7 +34,7 @@ TCB_t* make_thread(int);
 int lib_initialized = 0;
 
 // Thread Control
-TCB_t t_main;
+TCB_t* t_main;
 TCB_t* t_a_bola_da_vez; // Points to thread currently executing.
 int num_threads = 0; // Qty of thread instances; doubles as tid generator.
 
@@ -41,6 +42,10 @@ int num_threads = 0; // Qty of thread instances; doubles as tid generator.
 FILA2 Q_Ready; // Processes ready to run when the CPU becomes available.
 FILA2 Q_Blocked; // Processes blocked and waiting sync.
 FILA2 Q_Exec; // Process[es] running at a given time.
+
+
+// Context
+// ucontext_t 	main;
 
 // Notação,SUGESTÕES:
 // threads começam com t_coisa, queues com Q_Coisa
@@ -74,19 +79,24 @@ int failed(char* msg) {
 	printf("%s\n", msg);
 	return FAILED;
 }
+
 void print(char* msg) {
 	printf("%s\n", msg);
 }
+
 void* null(char* msg) {
 	printf("%s\n", msg);
 	return (void*)NULL;
 }
+
 PFILA2 alloc_queue() {
 	return (PFILA2)malloc(sizeof(FILA2));
 }
+
 TCB_t* alloc_thread() {
 	return (TCB_t*)malloc(sizeof(TCB_t));
 }
+
 void initialize_cthread() {
 
 	Q_Ready 	=  *alloc_queue();
@@ -100,12 +110,32 @@ void initialize_cthread() {
 	if (CreateFila2(&Q_Exec) != SUCCESS)
 		printf("ERROR: Could not initialize exec queue\n");
 
-		t_main.tid = 0;
-		t_main.prio = DEFAULT_PRIO;
-		getcontext(&(t_main.context));
-		set_exec(&t_main);
+	printf("?\n");
+	t_main = alloc_thread();
+
+	t_main->tid = 0;
+	t_main->prio = DEFAULT_PRIO;
+
+	getcontext(&(t_main->context));
+
+	//makecontext from ibm documentation
+	t_main->context.uc_link=0;
+	if((t_main->context.uc_stack.ss_sp = (char *) malloc(STACK_SIZE)) != NULL) {
+		t_main->context.uc_stack.ss_size = STACK_SIZE;
+		t_main->context.uc_stack.ss_flags = 0;
+
+		printf("?\n");
+		makecontext(&(t_main->context), (void*)&schedule_next_thread, 0);
+	}
+	else {
+		printf("not enough storage for stack");
+		return FAILED;
+	}
+
+
+	set_exec(&t_main);
 		// não acabou
-		return;
+	return;
 }
 
 void init() {
@@ -146,7 +176,6 @@ void print_queue(PFILA2 p_queue) {
 		print("PRINT QUEUE: Reached endqueue.");
 	}
 }
-
 
 // Queue insert
 int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
@@ -201,7 +230,6 @@ int remove_from_queue(PFILA2 p_queue, TCB_t* p_thread) {
 	}
 }
 
-
 int removeByTID(PFILA2 p_queue, int tid) {
 	int code ;
 	if (!is_valid(p_queue))
@@ -251,43 +279,10 @@ TCB_t* make_thread(int prio) {
 	p_thread->tid = generate_tid();
 	p_thread->state = PROCST_APTO;
 	p_thread->prio = prio;
+	p_thread->dormant = -1;
 	getcontext(&(p_thread->context));
 
 	return p_thread;
-}
-
-int ccreate (void* (*start)(void*), void *arg, int prio) {
-	// NOTE: argument "prio" ignored; defaults to zero upon creation
-	init();
-	TCB_t* p_thread = make_thread(prio);
-	// Fazer coisa de Contexto com a função passada pelo start,
-	// para o sistema da maq virtual rodar pra nós. /glm
-	
-	//makecontext from ibm documentation
-	p_thread->context.uc_link=0;
-	if((p_thread->context.uc_stack.ss_sp = (char *) malloc(STACK_SIZE)) != NULL) {
-		p_thread->context.uc_stack.ss_size = STACK_SIZE;
-		p_thread->context.uc_stack.ss_flags = 0;
-		makecontext(&(p_thread->context), (void*)&start, 1, arg);
-	}
-	else {
-		printf("not enough storage for stack");
-		return FAILED;
-	}
-
-
-	int code = emplace_in_queue(&Q_Ready, p_thread );
-	printf("depois da emplace\n");
-	if(code != SUCCESS) {
-		printf("ERROR: could not insert new thread in ready queue. Freeing thread. \n");
-		free(p_thread);
-		return FAILED;
-	}
-	else {
-		print("ok retornando tid\n");
-		print_queue(&Q_Ready);
-		return p_thread->tid;
-	}
 }
 
 int schedule_next_thread() {
@@ -297,6 +292,7 @@ int schedule_next_thread() {
 		if (emplace_in_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
 			t_a_bola_da_vez->state = PROCST_EXEC;
 			startTimer();
+			setcontext(&t_a_bola_da_vez->context);
 			return SUCCESS;
 		}
 		else
@@ -329,14 +325,156 @@ int cpop_ready() {
 }
 
 void cremove_ready(int tid) {
-printf("\nCalled removal of tid %d\n",tid);	
-removeByTID(&Q_Ready, tid);
+	printf("\nCalled removal of tid %d\n",tid);	
+	removeByTID(&Q_Ready, tid);
 
-print("Queue after call to remove element: ");
-print_queue(&Q_Ready); 
-printf("\n");
+	print("Queue after call to remove element: ");
+	print_queue(&Q_Ready); 
+	printf("\n");
 }
 
+int being_waited_queue(PFILA2 p_queue, int tid) {
+	int code;
+	if (!is_valid(p_queue))
+		return (failed("Invalid priority queue"));
+	else if (is_empty(p_queue)) {
+	printf("b\n");
+
+		return FAILED;
+	}
+	else {
+		printf("c\n");
+
+		code = FirstFila2(p_queue);
+		TCB_t* p_current = GetAtIteratorFila2(p_queue);
+		while (code != -NXTFILA_ENDQUEUE) {
+			if(p_current->tid==tid)
+			{
+				if (p_current->dormant != -1) {
+					print("Achou tid\n");
+					return SUCCESS;
+				}
+				return FAILED;
+			}
+			else
+			{
+				code = NextFila2(p_queue);
+				p_current = GetAtIteratorFila2(p_queue);
+					
+			}
+		}
+		return FAILED;
+	}
+}
+
+int being_waited(int tid) {
+	printf("0\n");
+	if(being_waited_queue(&Q_Ready, tid)==SUCCESS)
+		return SUCCESS;
+	printf("1\n");
+	if(being_waited_queue(&Q_Blocked, tid)==SUCCESS)
+		return SUCCESS;
+	printf("2\n");	
+	if(being_waited_queue(&Q_Exec, tid)==SUCCESS)
+		return SUCCESS;
+	return FAILED;
+}
+
+TCB_t* search_queue(PFILA2 p_queue, int tid) {
+	int code;
+	if (!is_valid(p_queue))
+		return NULL;
+	else if (is_empty(p_queue)) {
+		return NULL;
+	}
+	else {
+		code = FirstFila2(p_queue);
+		TCB_t* p_current = GetAtIteratorFila2(p_queue);
+		while (code != -NXTFILA_ENDQUEUE) {
+			if(p_current->tid==tid)
+			{
+				return p_current;				
+			}
+			else
+			{
+				code = NextFila2(p_queue);
+				p_current = GetAtIteratorFila2(p_queue);
+			}
+		}
+		return NULL;
+	}
+}
+
+TCB_t* find(int tid) {
+	
+	TCB_t* p_thread;
+
+	printf("00\n");
+	p_thread = search_queue(&Q_Ready, tid);
+	if(p_thread != NULL)
+		return p_thread;
+
+	printf("001\n");
+	p_thread = search_queue(&Q_Blocked, tid);
+	if(p_thread != NULL)
+		return p_thread;
+	
+	printf("002\n");
+	p_thread = search_queue(&Q_Exec, tid);
+	return p_thread;
+
+}
+
+int ccreate (void* (*start)(void*), void *arg, int prio) {
+	// NOTE: argument "prio" ignored; defaults to zero upon creation
+	init();
+	TCB_t* p_thread = make_thread(prio);
+	// Fazer coisa de Contexto com a função passada pelo start,
+	// para o sistema da maq virtual rodar pra nós. /glm
+	
+	//makecontext from ibm documentation
+	p_thread->context.uc_link=0;
+	if((p_thread->context.uc_stack.ss_sp = (char *) malloc(STACK_SIZE)) != NULL) {
+		// char iterator_stack[SIGSTKSZ];
+		// p_thread->context.uc_stack.ss_sp = malloc(STACK_SIZE);
+		p_thread->context.uc_stack.ss_size = STACK_SIZE;
+		p_thread->context.uc_stack.ss_flags = 0;
+
+		makecontext(&(p_thread->context), (void*)&start, 1, arg);
+	}
+	else {
+		printf("not enough storage for stack");
+		return FAILED;
+	}
+
+
+
+
+	int code = emplace_in_queue(&Q_Ready, p_thread );
+	printf("depois da emplace\n");
+	if(code != SUCCESS) {
+		printf("ERROR: could not insert new thread in ready queue. Freeing thread. \n");
+		free(p_thread);
+		return FAILED;
+	}
+	else {
+		print("ok retornando tid\n");
+		print_queue(&Q_Ready);
+		return p_thread->tid;
+	}
+}
+
+// int swap_thread_execution(TCB_t* incumbent) {
+	// t_a_bola_da_vez->prio = stopTimer();
+	// if(remove_from_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
+	// 	if(emplace_in_queue(&Q_Blocked, t_a_bola_da_vez) == SUCCESS) {
+	// 		t_a_bola_da_vez->state = PROCST_BLOQ;
+	// 		return SUCCESS;
+	// 	}
+	// 	return FAILED;
+	// }
+	// else return FAILED;
+// }
 
 int cyield(void) {
 	// Yield takes the executing thread from the EXEC queue,
@@ -347,8 +485,30 @@ int cyield(void) {
 }
 
 int cjoin(int tid) {
+	// acho que nao precisa (?)
 	init();
-	return -1;
+
+	printf("?\n");
+	// checar se nao existe (nao foi criada ou ja terminou)
+	TCB_t* incumbent = find(tid);
+	printf("%d\n",&incumbent->context);
+
+	if(incumbent==NULL)
+		return FAILED;
+	
+
+	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
+	if(being_waited(tid)==FAILED)
+	{
+		// swap_thread_execution(&incumbent);
+		printf("Hummm\n");
+		// printf("%d\n",t_a_bola_da_vez->tid);
+		// printf("%d\n",incumbent->tid);
+		// swapcontext(&(t_a_bola_da_vez->context), &(incumbent->context));
+		setcontext(&incumbent->context);
+	}
+
+	return SUCCESS;
 }
 
 int csem_init(csem_t *sem, int count) {
