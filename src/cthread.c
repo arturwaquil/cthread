@@ -12,7 +12,6 @@
 #define FAILED -1
 void init();
 void initialize_cthread();
-void set_exec(TCB_t*);
 int generate_tid();
 int is_empty(PFILA2);
 int is_valid(PFILA2);
@@ -44,14 +43,6 @@ FILA2 Q_Exec; // Process[es] running at a given time.
 // threads começam com t_coisa, queues com Q_Coisa
 // ponteiros em argumentos e variaveis em funcoes com p_coisa
 // semáforos com s_coisa ou x_coisa (muteX)
-
-void set_exec(TCB_t* p_thread) {
-	p_thread->state = PROCST_EXEC;
-	t_a_bola_da_vez = p_thread;
-	// [glm] Não sei se isso vai dar bom
-	// pq tem que cuidar da thread antiga que tava em exec.
-	// originalmente só criei para deixar a init mais bonita /glm
-}
 
 int generate_tid() {
 	num_threads++;
@@ -85,6 +76,14 @@ PFILA2 alloc_queue() {
 TCB_t* alloc_thread() {
 	return (TCB_t*)malloc(sizeof(TCB_t));
 }
+
+
+void init() {
+	if (!lib_initialized){
+		initialize_cthread();
+		lib_initialized = 1;
+	}
+}
 void initialize_cthread() {
 
 	Q_Ready 	=  *alloc_queue();
@@ -101,16 +100,10 @@ void initialize_cthread() {
 		t_main.tid = 0;
 		t_main.prio = DEFAULT_PRIO;
 		getcontext(&(t_main.context));
-		set_exec(&t_main);
+		t_main.state = PROCST_EXEC;
+		t_a_bola_da_vez = &t_main;
 		// não acabou
 		return;
-}
-
-void init() {
-	if (!lib_initialized){
-		initialize_cthread();
-		lib_initialized = 1;
-	}
 }
 
 int priority_at(PFILA2 queue) {
@@ -144,7 +137,6 @@ void print_queue(PFILA2 p_queue) {
 		print("PRINT QUEUE: Reached endqueue.");
 	}
 }
-
 
 // Queue insert
 int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
@@ -226,7 +218,6 @@ int removeByTID(PFILA2 p_queue, int tid) {
 }
 
 TCB_t* pop_queue(PFILA2 p_queue) {
-	int code;
 	TCB_t* p_thread;
 	if (!is_valid(p_queue))
 		return (null("Invalid priority queue"));
@@ -234,7 +225,7 @@ TCB_t* pop_queue(PFILA2 p_queue) {
 		return (null("Empty queue: nothing to pop"));
 	}
 	else {
-		code = FirstFila2(p_queue);
+	  FirstFila2(p_queue);
 		p_thread = GetAtIteratorFila2(p_queue);
 		if(DeleteAtIteratorFila2(p_queue) != SUCCESS) {
 			return(null("Failed to pop thread from queue"));
@@ -268,7 +259,6 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 		return FAILED;
 	}
 	else {
-		print("ok retornando tid\n");
 		print_queue(&Q_Ready);
 		return p_thread->tid;
 	}
@@ -305,24 +295,25 @@ int unschedule_current_thread() {
 int cpop_ready() {
 	TCB_t* thread = pop_queue(&Q_Ready);
 	if (thread != NULL)
-	{	
+	{
 		print_queue(&Q_Ready);
-		return thread->tid; 
+		return thread->tid;
 	}
 	else return -1;
 }
 
 void cremove_ready(int tid) {
-printf("\nCalled removal of tid %d\n",tid);	
+printf("\nCalled removal of tid %d\n",tid);
 removeByTID(&Q_Ready, tid);
 
 print("Queue after call to remove element: ");
-print_queue(&Q_Ready); 
+print_queue(&Q_Ready);
 printf("\n");
 }
 
 
 int cyield(void) {
+	init();
 	// Yield takes the executing thread from the EXEC queue,
 	// and places it into the ready queue with state = ready;
 	// Then it calls the scheduler to promote another thread to EXEC.
@@ -332,6 +323,19 @@ int cyield(void) {
 
 int cjoin(int tid) {
 	init();
+	// A thread calls cjoin to wait on another with identifier "tid".
+	// -If "tid" does not exist or finished exec, return ERROR CODE.
+	// -If two or more threads wait for "tid", the first is served and
+	//  the latter ones receive ERROR CODE immediately.
+	// -Else:
+	//  The CALLER/WAITER thread, which is executing,
+	//   becomes a blocked thread (Blocked Q);
+	//  The joining intent is registered on the WAITED thread,
+	//   (somehow);
+	//  Once WAITED is finished executing,
+	//   CALLER is woken from cryo-sleep and put in Ready Q;
+	//
+
 	return -1;
 }
 
@@ -342,6 +346,7 @@ int csem_init(csem_t *sem, int count) {
 	PFILA2 p_semaphore = alloc_queue();
 	if( CreateFila2(p_semaphore) != SUCCESS ) {
 		printf("ERROR: could not initialize semaphore queue\n");
+		free(p_semaphore);
 		sem->fila = NULL;
 		return FAILED;
 	}
@@ -351,14 +356,76 @@ int csem_init(csem_t *sem, int count) {
 	}
 }
 
+int demote_incumbent_to(int new_state) {
+	t_a_bola_da_vez->prio = stopTimer();
+	if(removeByTID(&Q_Exec, t_a_bola_da_vez->tid) != SUCCESS)
+		return FAILED;
+
+	switch(new_state) {
+
+		case PROCST_APTO:
+							if(emplace_in_queue(&Q_Ready, t_a_bola_da_vez) != SUCCESS)
+									return FAILED;
+							t_a_bola_da_vez->state = new_state;
+							return SUCCESS;
+
+		case PROCST_BLOQ:
+							if(emplace_in_queue(&Q_Blocked, t_a_bola_da_vez) != SUCCESS)
+									return FAILED;
+							t_a_bola_da_vez->state = new_state;
+							return SUCCESS;
+
+		case PROCST_TERMINO:
+							t_a_bola_da_vez->state = new_state;
+							//provavelmente desalocar ?
+							return SUCCESS;
+		default:
+				return FAILED;
+	}
+}
+
 int cwait(csem_t *sem) {
 	init();
-	return -1;
+	// A waiting call always decrements the resource count
+	// (this is being done after guaranteeing that the thread
+	// has been blocked and emplaced in the semaphore queue)
+	if(sem->count <= 0) {
+		// Resource count was already nonpositive before this call;
+		// Caller thread must wait at the semaphore.
+		if(demote_incumbent_to(PROCST_BLOQ) == SUCCESS) {
+			if(emplace_in_queue(sem->fila, t_a_bola_da_vez) == SUCCESS) {
+				sem->count -= 1;
+				return(schedule_next_thread());
+			}
+			else return(failed("FAILED CWAIT 1"));
+		}
+		else return(failed("FAILED CWAIT 2"));
+	}
+	else {
+		// RESOURCE AVAILABLE, no need to wait at the semaphore
+		// nao sei o que fazer aqui com essa informacao./glm
+		sem->count -= 1;
+		return SUCCESS;
+		//supostamente ja ta executando entao acho q eh isso? /glm
+	}
 }
 
 int csignal(csem_t *sem) {
 	init();
-	return -1;
+	// Thread currently executing is leaving a critical section.
+	// The resource count is incremented as the resource is freed.
+	sem->count += 1;
+	TCB_t* p_thread;
+	p_thread = pop_queue(sem->fila);
+	if (p_thread != NULL) {
+		if( removeByTID(&Q_Blocked, p_thread->tid)==SUCCESS
+	   && emplace_in_queue(&Q_Ready, p_thread) == SUCCESS) {
+			p_thread->state = PROCST_APTO;
+			return SUCCESS;
+		}
+		else return FAILED;
+	}
+	else return FAILED;
 }
 
 int cidentify (char *name, int size) {
