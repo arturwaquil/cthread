@@ -207,7 +207,7 @@ int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 		code = FirstFila2(p_queue);
 		TCB_t* p_current = GetAtIteratorFila2(p_queue);
 		while (code != -NXTFILA_ENDQUEUE) {
-			if (p_current->prio > p_thread->prio) {
+			if ((unsigned int)p_current->prio > (unsigned int)p_thread->prio) {
 				return InsertBeforeIteratorFila2(p_queue, p_thread);
 			}
 			else {
@@ -232,7 +232,7 @@ int remove_from_queue(PFILA2 p_queue, TCB_t* p_thread) {
 		TCB_t* p_current = GetAtIteratorFila2(p_queue);
 		while (code != -NXTFILA_ENDQUEUE) {
 			if (p_current->tid == p_thread->tid) {
-				print("Achou thread, removendo");
+				// print("Achou thread, removendo");
 				return DeleteAtIteratorFila2(p_queue);
 			}
 			else {
@@ -258,7 +258,7 @@ int removeByTID(PFILA2 p_queue, int tid) {
 		TCB_t* p_current = GetAtIteratorFila2(p_queue);
 		while (code != -NXTFILA_ENDQUEUE) {
 			if (p_current->tid == tid) {
-				print("Achou tid, removendo");
+				// print("Achou tid, removendo");
 				return DeleteAtIteratorFila2(p_queue);
 			}
 			else {
@@ -330,17 +330,17 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 }
 
 int schedule_next_thread() {
-	printf("\nscheduler\n");
-	printf("------------\n");
-	printf("Ready\n");
-	print_queue(&Q_Ready);
-	printf("\n");
-	printf("Blocked\n");
-	print_queue(&Q_Blocked);
-	printf("\n");
-	printf("Exec\n");
-	print_queue(&Q_Exec);
-	printf("------------\n");
+	// printf("\nscheduler\n");
+	// printf("------------\n");
+	// printf("Ready\n");
+	// print_queue(&Q_Ready);
+	// printf("\n");
+	// printf("Blocked\n");
+	// print_queue(&Q_Blocked);
+	// printf("\n");
+	// printf("Exec\n");
+	// print_queue(&Q_Exec);
+	// printf("------------\n");
 
 	t_a_bola_da_vez = pop_queue(&Q_Ready);
 
@@ -349,6 +349,8 @@ int schedule_next_thread() {
 		if (emplace_in_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
 			t_a_bola_da_vez->state = PROCST_EXEC;
 			startTimer();
+
+			// printf("run-> %d\n", t_a_bola_da_vez->tid);
 			setcontext(&t_a_bola_da_vez->context);
 			// swapcontext(&t_main.context, &t_a_bola_da_vez->context);
 			
@@ -362,7 +364,7 @@ int schedule_next_thread() {
 }
 
 int unschedule_current_thread() {
-	printf("\n$$$$$$$$$$$$\nretirei da exec\n");
+	// printf("\n$$$$$$$$$$$$\nretirei da exec\n");
 	t_a_bola_da_vez->prio = stopTimer();
 	if(remove_from_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
 		if(emplace_in_queue(&Q_Ready, t_a_bola_da_vez) == SUCCESS) {
@@ -401,7 +403,7 @@ int unblock_current_dormant(int tid) {
 }
 
 void terminate_current_thread() {
-	printf("\nterminando execução da thread %d\n", t_a_bola_da_vez->tid);
+	// printf("\nterminando execução da thread %d\n", t_a_bola_da_vez->tid);
 
 	t_a_bola_da_vez->prio = stopTimer();
 
@@ -424,7 +426,12 @@ void terminate_current_thread() {
 		t_a_bola_da_vez->state = PROCST_APTO;
 		schedule_next_thread();
 	}
-	printf("!!!!!! Não há thread em execucao. Erro!");
+	else
+	{
+		printf("ABORT. Cannot terminate thread. Q_Exec is empty");
+
+	}
+	
 }
 
 int cpop_ready() {
@@ -606,6 +613,7 @@ int demote_incumbent_to(int new_state) {
 							if(emplace_in_queue(&Q_Blocked, t_a_bola_da_vez) != SUCCESS)
 									return FAILED;
 							t_a_bola_da_vez->state = new_state;
+							// getcontext(&t_a_bola_da_vez);
 							return SUCCESS;
 
 		case PROCST_TERMINO:
@@ -625,7 +633,9 @@ int cwait(csem_t *sem) {
 	if(sem->count <= 0) {
 		// Resource count was already nonpositive before this call;
 		// Caller thread must wait at the semaphore.
+
 		if(demote_incumbent_to(PROCST_BLOQ) == SUCCESS) {
+		// if(block_current_thread == SUCCESS) {
 			if(emplace_in_queue(sem->fila, t_a_bola_da_vez) == SUCCESS) {
 				sem->count -= 1;
 				return(schedule_next_thread());
