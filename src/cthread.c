@@ -97,13 +97,13 @@ void initialize_cthread() {
 	if (CreateFila2(&Q_Exec) != SUCCESS)
 		printf("ERROR: Could not initialize exec queue\n");
 
-		t_main.tid = 0;
-		t_main.prio = DEFAULT_PRIO;
-		getcontext(&(t_main.context));
-		t_main.state = PROCST_EXEC;
-		t_a_bola_da_vez = &t_main;
-		// não acabou
-		return;
+	t_main.tid = 0;
+	t_main.prio = DEFAULT_PRIO;
+	getcontext(&(t_main.context));
+	t_main.state = PROCST_EXEC;
+	t_a_bola_da_vez = &t_main;
+	// não acabou
+	return;
 }
 
 int priority_at(PFILA2 queue) {
@@ -267,7 +267,6 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 int schedule_next_thread() {
 	t_a_bola_da_vez = pop_queue(&Q_Ready) ;
 	if(t_a_bola_da_vez != NULL ) {
-		t_a_bola_da_vez->state = PROCST_EXEC;
 		if (emplace_in_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
 			t_a_bola_da_vez->state = PROCST_EXEC;
 			startTimer();
