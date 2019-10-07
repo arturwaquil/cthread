@@ -35,7 +35,11 @@ int lib_initialized = 0;
 
 // Thread Control
 TCB_t t_main;
-TCB_t t_terminate;
+// TCB_t t_terminate;
+
+ucontext_t scheduler;
+ucontext_t terminate;
+
 TCB_t* t_a_bola_da_vez; // Points to thread currently executing.
 int num_threads = 0; // Qty of thread instances; doubles as tid generator.
 
@@ -89,7 +93,12 @@ void init() {
 	if (!lib_initialized){
 		initialize_cthread();
 		lib_initialized = 1;
-	}
+	}	
+}
+
+void return_to_main() {
+	printf("Retornei?\n");
+	return;
 }
 
 void initialize_cthread() {
@@ -110,25 +119,43 @@ void initialize_cthread() {
 	t_main.dormant = -1;
 
 	//set main thread's context
-	getcontext(&(t_main.context));
+	// getcontext(&(t_main.context));
+	// char stack[SIGSTKSZ];
+	// t_main.context.uc_link = 0;
+	// t_main.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+	// t_main.context.uc_stack.ss_size = sizeof(stack);
+	// makecontext(&(t_main.context), (void (*)(void))schedule_next_thread, 0);
+
+	getcontext(&(scheduler));
 	char stack[SIGSTKSZ];
-	t_main.context.uc_link = 0;
-	t_main.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-	t_main.context.uc_stack.ss_size = sizeof(stack);
-	makecontext(&(t_main.context), (void (*)(void))schedule_next_thread, 0);
+	scheduler.uc_link = 0;
+	scheduler.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+	scheduler.uc_stack.ss_size = sizeof(stack);
+	makecontext(&(scheduler), (void (*)(void))schedule_next_thread, 0);
 
 	//context set when threads context terminate, used on ccreate (uc_link definition)
-	getcontext(&(t_terminate.context));
-	t_terminate.context.uc_link = 0;
-	t_terminate.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-	t_terminate.context.uc_stack.ss_size = sizeof(stack);
-	makecontext(&(t_terminate.context), (void (*)(void))terminate_current_thread, 0);
+	// getcontext(&(t_terminate.context));
+	// t_terminate.context.uc_link = 0;
+	// t_terminate.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+	// t_terminate.context.uc_stack.ss_size = sizeof(stack);
+	// makecontext(&(t_terminate.context), (void (*)(void))terminate_current_thread, 0);
 
-	//set main thread to exec 
-	t_main.state = PROCST_EXEC;
+	getcontext(&terminate);
+	terminate.uc_link = 0;
+	terminate.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+	terminate.uc_stack.ss_size = sizeof(stack);
+	makecontext(&(terminate), (void (*)(void))terminate_current_thread, 0);
+
+
+	getcontext(&t_main.context);
+
+
+	// printf("daqui eu volto para a main?\n");
 	t_a_bola_da_vez = &t_main;
-	startTimer();	
 	emplace_in_queue(&Q_Exec, t_a_bola_da_vez);
+	startTimer();	
+	t_main.state = PROCST_EXEC;
+
 
 	return;
 }
@@ -282,7 +309,8 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 
 	// p_thread->context.uc_link = 0;
 	// p_thread->context.uc_link = &t_main.context;
-	p_thread->context.uc_link = &t_terminate.context;
+	// p_thread->context.uc_link = &t_terminate.context;
+	p_thread->context.uc_link = &terminate;
 
 	char stack[SIGSTKSZ];
 	p_thread->context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
@@ -302,7 +330,7 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 }
 
 int schedule_next_thread() {
-	printf("\nentrei no scheduler\n");
+	printf("\nscheduler\n");
 	printf("------------\n");
 	printf("Ready\n");
 	print_queue(&Q_Ready);
@@ -339,6 +367,7 @@ int unschedule_current_thread() {
 	if(remove_from_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
 		if(emplace_in_queue(&Q_Ready, t_a_bola_da_vez) == SUCCESS) {
 			t_a_bola_da_vez->state = PROCST_APTO;
+			getcontext(&t_a_bola_da_vez->context);
 			return SUCCESS;
 		}
 		return FAILED;
@@ -351,6 +380,7 @@ int block_current_thread() {
 	if(remove_from_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
 		if(emplace_in_queue(&Q_Blocked, t_a_bola_da_vez) == SUCCESS) {
 			t_a_bola_da_vez->state = PROCST_BLOQ;
+			getcontext(&t_a_bola_da_vez->context);
 			// printf("bloqueei %d\n",t_a_bola_da_vez->tid);
 			return SUCCESS;
 		}
@@ -524,16 +554,19 @@ int cjoin(int tid) {
 	//
 	TCB_t* incumbent = find(tid);
 	// printf("---\nincumbet!!!!!!!!!!! %d\n---\n", incumbent->tid);
-	printf("cjoin-> %d\n", incumbent->tid);
 
 	if(incumbent==NULL)
 		return FAILED;
+
 	
 	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
 	if(being_waited(tid)==FAILED)
 	{
 		incumbent->dormant=t_a_bola_da_vez->tid;
-		return block_current_thread() + schedule_next_thread();
+
+		int result = block_current_thread() + schedule_next_thread();
+		// return block_current_thread() + schedule_next_thread();
+		return result;
 	}
 
 	return FAILED;
