@@ -11,14 +11,14 @@
 
 
 void* fatorial(void *i) {
-     int fat=1, n;
+     int fat=1, N, n;
 
-     n = *(int *)i;
+     N = *(int *)i;
 
-     for (; n < 1; --n)
+     for ( n=N; n > 1; --n){
          fat = n * fat;
-
-     printf("Fatorial de %d:\n", fat);
+	}
+     printf("Fatorial de %d: %d\n", *(int *)i,fat);
      return NULL;
 }
 
@@ -57,4 +57,3 @@ int main(int argc, char **argv) {
 
 	return 0;
 }
-
