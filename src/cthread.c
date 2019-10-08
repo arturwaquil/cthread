@@ -93,7 +93,7 @@ void init() {
 	if (!lib_initialized){
 		initialize_cthread();
 		lib_initialized = 1;
-	}	
+	}
 }
 
 void return_to_main() {
@@ -153,7 +153,7 @@ void initialize_cthread() {
 	// printf("daqui eu volto para a main?\n");
 	t_a_bola_da_vez = &t_main;
 	emplace_in_queue(&Q_Exec, t_a_bola_da_vez);
-	startTimer();	
+	startTimer();
 	t_main.state = PROCST_EXEC;
 
 
@@ -190,6 +190,16 @@ void print_queue(PFILA2 p_queue) {
 		// End queue.
 		print("PRINT QUEUE: Reached endqueue.");
 	}
+}
+
+void print_queue_ready(){
+	print_queue(&Q_Ready);
+}
+void print_queue_bloq(){
+	print_queue(&Q_Blocked);
+}
+void print_queue_exec(){
+	print_queue(&Q_Exec);
 }
 
 // Queue insert
@@ -353,7 +363,7 @@ int schedule_next_thread() {
 			// printf("run-> %d\n", t_a_bola_da_vez->tid);
 			setcontext(&t_a_bola_da_vez->context);
 			// swapcontext(&t_main.context, &t_a_bola_da_vez->context);
-			
+
 			return SUCCESS;
 		}
 		else
@@ -431,7 +441,7 @@ void terminate_current_thread() {
 		printf("ABORT. Cannot terminate thread. Q_Exec is empty");
 
 	}
-	
+
 }
 
 int cpop_ready() {
@@ -477,7 +487,7 @@ int being_waited_queue(PFILA2 p_queue, int tid) {
 			{
 				code = NextFila2(p_queue);
 				p_current = GetAtIteratorFila2(p_queue);
-					
+
 			}
 		}
 		return FAILED;
@@ -507,7 +517,7 @@ TCB_t* search_queue(PFILA2 p_queue, int tid) {
 		while (code != -NXTFILA_ENDQUEUE) {
 			if(p_current->tid==tid)
 			{
-				return p_current;				
+				return p_current;
 			}
 			else
 			{
@@ -520,7 +530,7 @@ TCB_t* search_queue(PFILA2 p_queue, int tid) {
 }
 
 TCB_t* find(int tid) {
-	
+
 	TCB_t* p_thread;
 
 	p_thread = search_queue(&Q_Ready, tid);
@@ -530,7 +540,7 @@ TCB_t* find(int tid) {
 	p_thread = search_queue(&Q_Blocked, tid);
 	if(p_thread != NULL)
 		return p_thread;
-	
+
 	p_thread = search_queue(&Q_Exec, tid);
 	return p_thread;
 
@@ -565,7 +575,7 @@ int cjoin(int tid) {
 	if(incumbent==NULL)
 		return FAILED;
 
-	
+
 	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
 	if(being_waited(tid)==FAILED)
 	{

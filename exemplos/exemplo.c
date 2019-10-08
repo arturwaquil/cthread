@@ -21,18 +21,22 @@ void* func0(void *arg) {
 	cwait(semaforo);
 	printf("-FUNC0 entrou no semaforo! atual count: %d \n", semaforo->count);
 	printf("-FUNC0 fazendo coisas de secao critica \n");
-	printf("-FUNCO vai fazer um yield agora\n");
+	print_queue_ready();
+	printf("-FUNC0 vai fazer um yield agora\n");
 	cyield();
-	printf("\n-FUNCO: primeira instrucao após o cyield. ainda no semaforo, count: %d\n",semaforo->count);
+	printf("\n-FUNC0: primeira instrucao após o cyield. ainda no semaforo, count: %d\n",semaforo->count);
+print_queue_ready();
 	printf("-FUNCO hora de liberar o semaforo...\n");
 	csignal(semaforo);
+	print_queue_ready();
 	printf("-FUNCO fim.\n\n");
 	return NULL;
 }
 
 void* func1(void *arg) {
 	printf("\n--FUNC1 Eu sou a thread ID1 imprimindo %d\n", *((int *)arg));
-	printf("--FUNC1 tentando recurso binario\n");
+print_queue_ready();
+	printf("--FUNC1 tentando semaforo count = %d\n",semaforo->count);
 
 	cwait(semaforo);
 	printf("--FUNC1 fazendo coisas de semaforo !!\n");
