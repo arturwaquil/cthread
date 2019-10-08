@@ -520,7 +520,10 @@ int cyield(void) {
 	// Yield takes the executing thread from the EXEC queue,
 	// and places it into the ready queue with state = ready;
 	// Then it calls the scheduler to promote another thread to EXEC.
-	return unschedule_current_thread() + schedule_next_thread() ;
+	int retorno = unschedule_current_thread();
+	int retorno2 = schedule_next_thread();
+	printf("Retornos cyield: unschedule %d, schedule %d\n", retorno, retorno2);
+	return (retorno + retorno2);
 	// Isso eh naughty d+ e provavelmente vou mudar /glm
 }
 
