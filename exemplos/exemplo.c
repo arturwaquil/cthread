@@ -30,7 +30,11 @@ void* f2(void *arg) {
 
 int main(int argc, char *argv[]) {
 	
-	int id1, id2, id3;
+	char *name = (char*)malloc(300*sizeof(char*));
+	cidentify(name, 300);
+	printf("%s\n", name);
+	
+	int id1, id2;
 	int i = 10;
 
 	print("=>MAIN comecando");

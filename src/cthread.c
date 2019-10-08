@@ -11,7 +11,6 @@
 #define SUCCESS 0
 #define FAILED -1
 void init();
-void initialize_cthread();
 int generate_tid();
 int is_empty(PFILA2);
 int is_valid(PFILA2);
@@ -89,73 +88,67 @@ TCB_t* alloc_thread() {
 
 void init() {
 	if (!lib_initialized){
-		initialize_cthread();
+		
+		print("inicializando cthread...");
+		
+		Q_Ready		=  *alloc_queue();
+		Q_Blocked	=  *alloc_queue();
+		Q_Exec		=  *alloc_queue();
+
+		if (CreateFila2(&Q_Ready) != SUCCESS)
+			printf("ERROR: Could not initialize ready queue\n");
+		if (CreateFila2(&Q_Blocked) != SUCCESS)
+			printf("ERROR: Could not initialize blocked queue\n");
+		if (CreateFila2(&Q_Exec) != SUCCESS)
+			printf("ERROR: Could not initialize exec queue\n");
+
+		t_main.tid = 0;
+		t_main.prio = DEFAULT_PRIO;
+		t_main.dormant = -1;
+
+		//set main thread's context
+		// getcontext(&(t_main.context));
+		// char stack[SIGSTKSZ];
+		// t_main.context.uc_link = 0;
+		// t_main.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+		// t_main.context.uc_stack.ss_size = sizeof(stack);
+		// makecontext(&(t_main.context), (void (*)(void))schedule_next_thread, 0);
+
+		// getcontext(&(scheduler));
+		// char stack[SIGSTKSZ];
+		// scheduler.uc_link = 0;
+		// scheduler.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+		// scheduler.uc_stack.ss_size = sizeof(stack);
+		// makecontext(&(scheduler), (void (*)(void))schedule_next_thread, 0);
+
+		//context set when threads context terminate, used on ccreate (uc_link definition)
+		// getcontext(&(t_terminate.context));
+		// t_terminate.context.uc_link = 0;
+		// t_terminate.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+		// t_terminate.context.uc_stack.ss_size = sizeof(stack);
+		// makecontext(&(t_terminate.context), (void (*)(void))terminate_current_thread, 0);
+
+		getcontext(&terminate);
+		char stack[SIGSTKSZ];
+		terminate.uc_link = 0;
+		terminate.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+		terminate.uc_stack.ss_size = sizeof(stack);
+		makecontext(&(terminate), (void (*)(void))terminate_current_thread, 0);
+
+		getcontext(&t_main.context);
+
+		// printf("daqui eu volto para a main?\n");
+		t_incumbent = &t_main;
+		emplace_in_queue(&Q_Exec, t_incumbent);
+		startTimer();
+		t_main.state = PROCST_EXEC;
+		
 		lib_initialized = 1;
 	}
 }
 
 void return_to_main() {
 	printf("Retornei?\n");
-	return;
-}
-
-void initialize_cthread() {
-
-	Q_Ready 	=  *alloc_queue();
-	Q_Blocked =  *alloc_queue();
-	Q_Exec	  =  *alloc_queue();
-
-	if (CreateFila2(&Q_Ready) != SUCCESS)
-		printf("ERROR: Could not initialize ready queue\n");
-	if (CreateFila2(&Q_Blocked) != SUCCESS)
-		printf("ERROR: Could not initialize blocked queue\n");
-	if (CreateFila2(&Q_Exec) != SUCCESS)
-		printf("ERROR: Could not initialize exec queue\n");
-
-	t_main.tid = 0;
-	t_main.prio = DEFAULT_PRIO;
-	t_main.dormant = -1;
-
-	//set main thread's context
-	// getcontext(&(t_main.context));
-	// char stack[SIGSTKSZ];
-	// t_main.context.uc_link = 0;
-	// t_main.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-	// t_main.context.uc_stack.ss_size = sizeof(stack);
-	// makecontext(&(t_main.context), (void (*)(void))schedule_next_thread, 0);
-
-	// getcontext(&(scheduler));
-	// char stack[SIGSTKSZ];
-	// scheduler.uc_link = 0;
-	// scheduler.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-	// scheduler.uc_stack.ss_size = sizeof(stack);
-	// makecontext(&(scheduler), (void (*)(void))schedule_next_thread, 0);
-
-	//context set when threads context terminate, used on ccreate (uc_link definition)
-	// getcontext(&(t_terminate.context));
-	// t_terminate.context.uc_link = 0;
-	// t_terminate.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-	// t_terminate.context.uc_stack.ss_size = sizeof(stack);
-	// makecontext(&(t_terminate.context), (void (*)(void))terminate_current_thread, 0);
-
-	getcontext(&terminate);
-	char stack[SIGSTKSZ];
-	terminate.uc_link = 0;
-	terminate.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-	terminate.uc_stack.ss_size = sizeof(stack);
-	makecontext(&(terminate), (void (*)(void))terminate_current_thread, 0);
-
-
-	getcontext(&t_main.context);
-
-
-	// printf("daqui eu volto para a main?\n");
-	t_incumbent = &t_main;
-	emplace_in_queue(&Q_Exec, t_incumbent);
-	startTimer();
-	t_main.state = PROCST_EXEC;
-
-
 	return;
 }
 
@@ -279,6 +272,7 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 	// NOTE: argument "prio" ignored; defaults to zero upon creation
 	init();
 	TCB_t* p_thread = make_thread(prio);
+	printf("criando thread %d\n", p_thread->tid);
 	// Fazer coisa de Contexto com a função passada pelo start,
 	// para o sistema da maq virtual rodar pra nós. /glm
 
@@ -383,7 +377,7 @@ int unblock_current_dormant(int tid) {
 }
 
 void terminate_current_thread() {
-	// printf("\nterminando execução da thread %d\n", t_incumbent->tid);
+	printf("terminando execucao da thread %d\n", t_incumbent->tid);
 
 	t_incumbent->prio = stopTimer();
 
@@ -403,14 +397,16 @@ void terminate_current_thread() {
 		// 	t_incumbent->state = PROCST_APTO;
 		// 	return SUCCESS;
 		// }
+		print("");
 		t_incumbent->state = PROCST_APTO;
 		schedule_next_thread();
 	}
 	else
 	{
-		printf("ABORT. Cannot terminate thread. Q_Exec is empty");
+		print("ABORT. Cannot terminate thread. Q_Exec is empty");
 
 	}
+	
 
 }
 
@@ -546,7 +542,8 @@ int cjoin(int tid) {
 	// printf("---\nincumbet!!!!!!!!!!! %d\n---\n", incumbent->tid);
 
 	if(incumbent==NULL)
-		return failed("NULL INCUMBENT AT CJOIN");;
+		//return failed("NULL INCUMBENT AT CJOIN");;
+		return FAILED;
 
 
 	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
@@ -660,6 +657,13 @@ int csignal(csem_t *sem) {
 }
 
 int cidentify (char *name, int size) {
-	strncpy (name, "HAG - 2019/2 - Alpha.", size);
+	char *nomes = "Artur Waquil Campana\t00287677\nGiovanna Lazzari Miotto\t00207758\nHenrique Chaves Pacheco\t00299902\n\0";
+	
+	if (size < strlen(nomes)) {
+		printf("ERROR: size is too small\n");
+		return FAILED;
+	}
+	else strncpy(name, nomes, size);
+	
 	return SUCCESS;
 }
