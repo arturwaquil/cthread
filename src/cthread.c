@@ -10,34 +10,51 @@
 #define DEFAULT_PRIO 0
 #define SUCCESS 0
 #define FAILED -1
-void init();
-int generate_tid();
-int is_empty(PFILA2);
-int is_valid(PFILA2);
-int schedule_next_thread();
-int unschedule_current_thread();
-int emplace_in_queue(PFILA2, TCB_t*);
-TCB_t* pop_queue(PFILA2 p_queue);
-void terminate_current_thread();
-int failed(char* msg);
-void* null(char* msg);
-void print(char* msg);
-PFILA2 alloc_queue();
-TCB_t* alloc_thread();
-TCB_t* make_thread(int);
-TCB_t* search_queue(PFILA2 p_queue, int tid);
-int unblock_current_dormant(int tid);
+
+int		generate_tid();
+int		is_empty(PFILA2);
+int		is_valid(PFILA2);
+int		failed(char* msg);
+void	print(char* msg);
+void*	null(char* msg);
+PFILA2	alloc_queue();
+TCB_t*	alloc_thread();
+void	init();
+void	print_queue(PFILA2 p_queue);
+void	print_queue_ready();
+void	print_queue_bloq();
+void	print_queue_exec();
+int		emplace_in_queue(PFILA2, TCB_t*);
+int		removeByTID(PFILA2 p_queue, int tid);
+TCB_t*	pop_queue(PFILA2 p_queue);
+TCB_t*	make_thread(int);
+//int	ccreate (void* (*start)(void*), void *arg, int prio);
+int		schedule_next_thread();
+int		remove_emplace(TCB_t* thread, PFILA2 from_queue, PFILA2 to_queue);
+int		unschedule_current_thread();
+int		block_current_thread();
+int		unblock_current_dormant(int tid);
+void	terminate_current_thread();
+int		cpop_ready();
+void	cremove_ready(int tid);
+int		being_waited_queue(PFILA2 p_queue, int tid);
+int		being_waited(int tid);
+TCB_t*	search_queue(PFILA2 p_queue, int tid);
+TCB_t*	find(int tid);
+// int	cyield();
+// int	cjoin(int tid);
+int		demote_incumbent_to(int new_state);
+// int	csem_init(csem_t *sem, int count);
+// int	cwait(csem_t *sem);
+// int	csignal(csem_t *sem);
+// int	cidentify (char *name, int size);
 
 
 int lib_initialized = 0;
 
-// Thread Control
-TCB_t t_main;
-// TCB_t t_terminate;
-
-//ucontext_t scheduler;
 ucontext_t terminate;
 
+TCB_t t_main;
 TCB_t* t_incumbent; // Points to thread currently executing.
 int num_threads = 0; // Qty of thread instances; doubles as tid generator.
 
@@ -294,22 +311,10 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 }
 
 int schedule_next_thread() {
-	// printf("\nscheduler\n");
-	// printf("------------\n");
-	// printf("Ready\n");
-	// print_queue(&Q_Ready);
-	// printf("\n");
-	// printf("Blocked\n");
-	// print_queue(&Q_Blocked);
-	// printf("\n");
-	// printf("Exec\n");
-	// print_queue(&Q_Exec);
-	// printf("------------\n");
 
 	t_incumbent = pop_queue(&Q_Ready);
 
 	if(t_incumbent != NULL ) {
-		t_incumbent->state = PROCST_EXEC;
 		if (emplace_in_queue(&Q_Exec, t_incumbent) == SUCCESS) {
 			t_incumbent->state = PROCST_EXEC;
 			startTimer();
@@ -504,10 +509,12 @@ TCB_t* find(int tid) {
 
 	p_thread = search_queue(&Q_Exec, tid);
 	return p_thread;
+	
+	// returns NULL if tid is not found in any queue
 
 }
 
-int cyield(void) {
+int cyield() {
 	init();
 	// Yield takes the executing thread from the EXEC queue,
 	// and places it into the ready queue with state = ready;
@@ -544,7 +551,6 @@ int cjoin(int tid) {
 	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
 	if(being_waited(tid)==FAILED)
 	{
-		// TODO: aqui ta mudando apenas a variavel local??
 		incumbent->dormant=t_incumbent->tid;
 
 		int result = block_current_thread() + schedule_next_thread();
