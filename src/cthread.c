@@ -428,6 +428,30 @@ int csignal(csem_t *sem) {
 }
 
 int cidentify (char *name, int size) {
-	strncpy (name, "HAG - 2019/2 - Alpha.", size);
+
+	char *nomes = "Artur Waquil Campana\t00287677\nGiovanna Lazzari Miotto\t00207758\nHenrique Chaves Pacheco\t00299902\n\0";
+
+	if (size < strlen(nomes)) {
+		printf("ERROR: size is too small\n");
+		return FAILED;
+	}
+	else strncpy(name, nomes, size);
+
 	return SUCCESS;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -11,6 +11,7 @@
 #include "../include/support.h"
 #include "../include/cthread.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 void* func0(void *arg) {
 	printf("Eu sou a thread ID0 imprimindo %d\n", *((int *)arg));
@@ -23,6 +24,10 @@ void* func1(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
+
+	char *name = (char*)malloc(300*sizeof(char*));
+	cidentify(name, 300);
+	printf("%s", name);
 
 	int id1, id2,id3,id4,id5,id6,id7;
 	int i = 10;
