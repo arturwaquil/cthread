@@ -552,7 +552,6 @@ int cjoin(int tid) {
 	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
 	if(being_waited(tid)==FAILED)
 	{
-		// TODO: aqui ta mudando apenas a variavel local??
 		incumbent->dormant=t_incumbent->tid;
 
 		int result = block_current_thread() + schedule_next_thread();

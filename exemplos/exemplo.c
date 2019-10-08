@@ -14,34 +14,77 @@
 
 csem_t* semaforo;
 
-void* func0(void *arg) {
-	printf("\n-FUNC0 Eu sou a thread ID0 imprimindo %d\n", *((int *)arg));
+void* f1(void *arg) {
+	print("=>F1 executando");
+	print_queue_ready();print("");
+	//cyield();
+	return NULL;
+}
 
-	printf("-FUNC0: vai tentar semaforo binario com atual count: %d \n", semaforo->count);
+void* f2(void *arg) {
+	print("=>F2 executando");
+	print_queue_ready();print("");
+	//cyield();
+	return NULL;
+}
+
+int main(int argc, char *argv[]) {
+	
+	int id1, id2, id3;
+	int i = 10;
+
+	print("=>MAIN comecando");
+	print_queue_ready();print("");
+
+	id1 = ccreate(f1, (void *)&i, 0);
+	print("=>MAIN criou thread para F1");
+	id2 = ccreate(f2, (void *)&i, 0);
+	print("=>MAIN criou thread para F2");
+
+	print_queue_ready();print("");
+
+	print("=>MAIN vai esperar as threads");
+	cjoin(id1);
+	print("=>MAIN deu join na F1");
+	cjoin(id2);
+	print("=>MAIN deu join na F2");
+
+	print("=>MAIN terminando");
+	print("");
+	return 0;
+}
+
+
+
+/*
+void* func0(void *arg) {
+	print("\n-FUNC0 Eu sou a thread ID0 imprimindo %d\n", *((int *)arg));
+
+	print("-FUNC0: vai tentar semaforo binario com atual count: %d \n", semaforo->count);
 	cwait(semaforo);
-	printf("-FUNC0 entrou no semaforo! atual count: %d \n", semaforo->count);
-	printf("-FUNC0 fazendo coisas de secao critica \n");
+	print("-FUNC0 entrou no semaforo! atual count: %d \n", semaforo->count);
+	print("-FUNC0 fazendo coisas de secao critica ");
 	print_queue_ready();
-	printf("-FUNC0 vai fazer um yield agora\n");
+	print("-FUNC0 vai fazer um yield agora");
 	cyield();
-	printf("\n-FUNC0: primeira instrucao após o cyield. ainda no semaforo, count: %d\n",semaforo->count);
+	print("\n-FUNC0: primeira instrucao após o cyield. ainda no semaforo, count: %d\n",semaforo->count);
 print_queue_ready();
-	printf("-FUNCO hora de liberar o semaforo...\n");
+	print("-FUNCO hora de liberar o semaforo...");
 	csignal(semaforo);
 	print_queue_ready();
-	printf("-FUNCO fim.\n\n");
+	print("-FUNCO fim.\n");
 	return NULL;
 }
 
 void* func1(void *arg) {
-	printf("\n--FUNC1 Eu sou a thread ID1 imprimindo %d\n", *((int *)arg));
+	print("\n--FUNC1 Eu sou a thread ID1 imprimindo %d\n", *((int *)arg));
 print_queue_ready();
-	printf("--FUNC1 tentando semaforo count = %d\n",semaforo->count);
+	print("--FUNC1 tentando semaforo count = %d\n",semaforo->count);
 
 	cwait(semaforo);
-	printf("--FUNC1 fazendo coisas de semaforo !!\n");
-	printf("--FUNC1 abc \n");
-	printf("--FUNC1 123 \n");
+	print("--FUNC1 fazendo coisas de semaforo !!");
+	print("--FUNC1 abc ");
+	print("--FUNC1 123 ");
 	csignal(semaforo);
 
 	return NULL;
@@ -54,7 +97,7 @@ int main(int argc, char *argv[]) {
 
 	semaforo = (csem_t*)malloc(sizeof(csem_t));
 	if(csem_init(semaforo,1) == 0) {
-		printf("Inicializou semaforo binario sucesso\n\n");
+		print("Inicializou semaforo binario sucesso\n");
 	}
 
 	id1 = ccreate(func0, (void *)&i, 0);
@@ -67,7 +110,7 @@ int main(int argc, char *argv[]) {
 	//id7=ccreate(func1, (void *)&i, 0);
 
 //	int x = cpop_ready();
-//printf("TID popped: %d\n", x);
+//print("TID popped: %d\n", x);
 
 //cremove_ready(id6);
 //cremove_ready(id5);
@@ -86,24 +129,24 @@ int main(int argc, char *argv[]) {
 //cremove_ready(id7);
 
 
-	printf("\nEu sou a main ap�s a cria��o de ID1 e ID2, ocupando o recurso binario\n");
+	print("\nEu sou a main ap�s a cria��o de ID1 e ID2, ocupando o recurso binario");
 	if(cwait(semaforo) == 0) {
-		printf("+MAIN ocupou o semaforo binario\n");
-		printf("+MAIN Contagem semaforo: %d \n", semaforo->count);
-		printf("+MAIN vai fazer CSIGNAL\n\n");
+		print("=>MAIN ocupou o semaforo binario");
+		print("=>MAIN Contagem semaforo: %d \n", semaforo->count);
+		print("=>MAIN vai fazer CSIGNAL\n");
 		print_queue(semaforo->fila);
 		int retorno = csignal(semaforo);
-		printf("+MAIN Codigo retornado do csignal: %d. \n+MAIN Count semaforo atual: %d\n",retorno,
+		print("=>MAIN Codigo retornado do csignal: %d. \n=>MAIN Count semaforo atual: %d\n",retorno,
 	semaforo->count);
 		if (retorno == 0) {
-			printf("+MAIN fez o CSignal ok, liberou o semaforo \n");
+			print("=>MAIN fez o CSignal ok, liberou o semaforo ");
 		}
-		printf("+MAIN vai fazer CYIELD\n\n");
+		print("=>MAIN vai fazer CYIELD\n");
 		retorno = cyield();
-		printf("+MAIN retornou esse valor do cyield dela: %d\n", retorno);
+		print("=>MAIN retornou esse valor do cyield dela: %d\n", retorno);
 		if ( retorno == 0 )
 			{
-				printf("Main fez o CYIELD ok\n");
+				print("Main fez o CYIELD ok");
 			}
 	}
 
@@ -112,10 +155,10 @@ int main(int argc, char *argv[]) {
 	//cjoin(id1);
 	//cjoin(id2);
 
-	printf("Eu sou a main voltando para terminar o programa\n");
+	print("Eu sou a main voltando para terminar o programa");
 
 
 
 
 	return 0;
-}
+}*/
