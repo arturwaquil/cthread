@@ -90,13 +90,15 @@ int main(int argc, char *argv[]) {
 	if(cwait(semaforo) == 0) {
 		printf("+MAIN ocupou o semaforo binario\n");
 		printf("+MAIN Contagem semaforo: %d \n", semaforo->count);
-		printf("+MAIN vai fazer CYIELD\n\n");
+		printf("+MAIN vai fazer CSIGNAL\n\n");
+		print_queue(semaforo->fila);
 		int retorno = csignal(semaforo);
 		printf("+MAIN Codigo retornado do csignal: %d. \n+MAIN Count semaforo atual: %d\n",retorno,
 	semaforo->count);
 		if (retorno == 0) {
 			printf("+MAIN fez o CSignal ok, liberou o semaforo \n");
 		}
+		printf("+MAIN vai fazer CYIELD\n\n");
 		retorno = cyield();
 		printf("+MAIN retornou esse valor do cyield dela: %d\n", retorno);
 		if ( retorno == 0 )

@@ -18,7 +18,6 @@ int is_valid(PFILA2);
 int schedule_next_thread();
 int unschedule_current_thread();
 int emplace_in_queue(PFILA2, TCB_t*);
-int remove_from_queue(PFILA2, TCB_t*);
 TCB_t* pop_queue(PFILA2 p_queue);
 void terminate_current_thread();
 int failed(char* msg);
@@ -40,7 +39,7 @@ TCB_t t_main;
 ucontext_t scheduler;
 ucontext_t terminate;
 
-TCB_t* t_a_bola_da_vez; // Points to thread currently executing.
+TCB_t* t_incumbent; // Points to thread currently executing.
 int num_threads = 0; // Qty of thread instances; doubles as tid generator.
 
 // Scheduler state queues:
@@ -59,13 +58,12 @@ int generate_tid() {
 }
 
 int is_empty(PFILA2 p_queue) {
-	return ((FirstFila2(p_queue) != SUCCESS)
-			&& (NextFila2(p_queue) == -NXTFILA_VAZIA));
+	return (NextFila2(p_queue) == -NXTFILA_VAZIA);
 }
 
 int is_valid(PFILA2 p_queue) {
-	return ((FirstFila2(p_queue) == SUCCESS)
-			|| (NextFila2(p_queue) != -NXTFILA_ITERINVAL));
+	return ( (FirstFila2(p_queue) == SUCCESS) ||
+					((FirstFila2(p_queue) != SUCCESS) && (NextFila2(p_queue) != -NXTFILA_ITERINVAL)));
 }
 
 int failed(char* msg) {
@@ -151,22 +149,13 @@ void initialize_cthread() {
 
 
 	// printf("daqui eu volto para a main?\n");
-	t_a_bola_da_vez = &t_main;
-	emplace_in_queue(&Q_Exec, t_a_bola_da_vez);
+	t_incumbent = &t_main;
+	emplace_in_queue(&Q_Exec, t_incumbent);
 	startTimer();
 	t_main.state = PROCST_EXEC;
 
 
 	return;
-}
-
-int priority_at(PFILA2 queue) {
-	TCB_t* p = GetAtIteratorFila2(queue);
-	if(p !=NULL ) {
-		int prio = p->prio;
-		return prio;
-	}
-	else return FAILED;
 }
 
 void print_queue(PFILA2 p_queue) {
@@ -230,32 +219,6 @@ int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 	}
 }
 
-int remove_from_queue(PFILA2 p_queue, TCB_t* p_thread) {
-	int code ;
-	if (!is_valid(p_queue))
-		return (failed("Invalid priority queue"));
-	else if (is_empty(p_queue)) {
-		return (failed("Empty queue: nothing to remove"));
-	}
-	else {
-		code = FirstFila2(p_queue);
-		TCB_t* p_current = GetAtIteratorFila2(p_queue);
-		while (code != -NXTFILA_ENDQUEUE) {
-			if (p_current->tid == p_thread->tid) {
-				// print("Achou thread, removendo");
-				return DeleteAtIteratorFila2(p_queue);
-			}
-			else {
-				code = NextFila2(p_queue);
-				p_current = GetAtIteratorFila2(p_queue);
-			}
-		}
-		// END QUEUE
-		return failed("Thread not found in queue for removal.");
-	}
-}
-
-
 int removeByTID(PFILA2 p_queue, int tid) {
 	int code ;
 	if (!is_valid(p_queue))
@@ -283,6 +246,7 @@ int removeByTID(PFILA2 p_queue, int tid) {
 
 TCB_t* pop_queue(PFILA2 p_queue) {
 	TCB_t* p_thread;
+	//printf(" codigo NEXTFILA2 : %d\n", NextFila2(p_queue) );
 	if (!is_valid(p_queue))
 		return (null("Invalid priority queue"));
 	else if (is_empty(p_queue)) {
@@ -352,17 +316,17 @@ int schedule_next_thread() {
 	// print_queue(&Q_Exec);
 	// printf("------------\n");
 
-	t_a_bola_da_vez = pop_queue(&Q_Ready);
+	t_incumbent = pop_queue(&Q_Ready);
 
-	if(t_a_bola_da_vez != NULL ) {
-		t_a_bola_da_vez->state = PROCST_EXEC;
-		if (emplace_in_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
-			t_a_bola_da_vez->state = PROCST_EXEC;
+	if(t_incumbent != NULL ) {
+		t_incumbent->state = PROCST_EXEC;
+		if (emplace_in_queue(&Q_Exec, t_incumbent) == SUCCESS) {
+			t_incumbent->state = PROCST_EXEC;
 			startTimer();
 
-			// printf("run-> %d\n", t_a_bola_da_vez->tid);
-			setcontext(&t_a_bola_da_vez->context);
-			// swapcontext(&t_main.context, &t_a_bola_da_vez->context);
+			// printf("run-> %d\n", t_incumbent->tid);
+			setcontext(&t_incumbent->context);
+			// swapcontext(&t_main.context, &t_incumbent->context);
 
 			return SUCCESS;
 		}
@@ -373,67 +337,72 @@ int schedule_next_thread() {
 		return failed("Did not select next thread ready->exec");
 }
 
+
+int remove_emplace(TCB_t* thread, PFILA2 from_queue, PFILA2 to_queue) {
+
+	int removal_code = removeByTID(from_queue, thread->tid);
+	int emplace_code = emplace_in_queue(to_queue, thread);
+	if ((removal_code == SUCCESS) && (emplace_code == SUCCESS)){
+		return SUCCESS;
+	}
+	else {
+		return failed("FAILED QUEUE CHANGE at remove_emplace");
+	}
+}
+
 int unschedule_current_thread() {
 	// printf("\n$$$$$$$$$$$$\nretirei da exec\n");
-	t_a_bola_da_vez->prio = stopTimer();
-	if(remove_from_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
-		if(emplace_in_queue(&Q_Ready, t_a_bola_da_vez) == SUCCESS) {
-			t_a_bola_da_vez->state = PROCST_APTO;
-			getcontext(&t_a_bola_da_vez->context);
-			return SUCCESS;
-		}
-		return FAILED;
+	t_incumbent->prio = stopTimer();
+	if( remove_emplace(t_incumbent, &Q_Exec, &Q_Ready) == SUCCESS) {
+		t_incumbent->state = PROCST_APTO;
+		getcontext(&t_incumbent->context);
+		return SUCCESS;
 	}
-	else return FAILED;
+	else return failed("Failed Unschedule curr");
 }
 
 int block_current_thread() {
-	t_a_bola_da_vez->prio = stopTimer();
-	if(remove_from_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
-		if(emplace_in_queue(&Q_Blocked, t_a_bola_da_vez) == SUCCESS) {
-			t_a_bola_da_vez->state = PROCST_BLOQ;
-			getcontext(&t_a_bola_da_vez->context);
-			// printf("bloqueei %d\n",t_a_bola_da_vez->tid);
+	t_incumbent->prio = stopTimer();
+	if( remove_emplace(t_incumbent, &Q_Exec, &Q_Blocked) == SUCCESS) {
+			t_incumbent->state = PROCST_BLOQ;
+			getcontext(&t_incumbent->context);
+			// printf("bloqueei %d\n",t_incumbent->tid);
 			return SUCCESS;
-		}
-		return FAILED;
 	}
-	else return FAILED;
+	else
+		return failed("Failed Block Current ");;
 }
 
 int unblock_current_dormant(int tid) {
 	TCB_t* p_thread = search_queue(&Q_Blocked, tid);
-	if(remove_from_queue(&Q_Blocked, p_thread) == SUCCESS) {
-		if(emplace_in_queue(&Q_Ready, p_thread) == SUCCESS) {
-			return SUCCESS;
-		}
-		return FAILED;
+	if( remove_emplace(p_thread, &Q_Blocked, &Q_Ready) == SUCCESS) {
+		return SUCCESS;
 	}
-	else return FAILED;
+	else return failed("Failed Unblock Dormant");
 }
 
 void terminate_current_thread() {
-	// printf("\nterminando execução da thread %d\n", t_a_bola_da_vez->tid);
+	// printf("\nterminando execução da thread %d\n", t_incumbent->tid);
 
-	t_a_bola_da_vez->prio = stopTimer();
+	t_incumbent->prio = stopTimer();
 
 	//acorda a thread dorment
-	if(t_a_bola_da_vez->dormant!=-1)
+	if(t_incumbent->dormant!=-1)
 	{
-		printf("vou acordar a thread %d\n", t_a_bola_da_vez->dormant);
-		if(unblock_current_dormant(t_a_bola_da_vez->dormant)==FAILED)
+		printf("vou acordar a thread %d\n", t_incumbent->dormant);
+		if(unblock_current_dormant(t_incumbent->dormant)==FAILED)
 		{
 			print("Could not wake thread up");
 			exit(EXIT_FAILURE);
 		}
 	}
 
-	if(remove_from_queue(&Q_Exec, t_a_bola_da_vez) == SUCCESS) {
-		// if(emplace_in_queue(&Q_Ready, t_a_bola_da_vez) == SUCCESS) {
-		// 	t_a_bola_da_vez->state = PROCST_APTO;
+	if(removeByTID(&Q_Exec, t_incumbent->tid) == SUCCESS) {
+		// if(emplace_in_queue(&Q_Ready, t_incumbent) == SUCCESS) {
+		// 	t_incumbent->state = PROCST_APTO;
 		// 	return SUCCESS;
 		// }
-		t_a_bola_da_vez->state = PROCST_APTO;
+		t_incumbent->state = PROCST_APTO;
 		schedule_next_thread();
 	}
 	else
@@ -573,13 +542,13 @@ int cjoin(int tid) {
 	// printf("---\nincumbet!!!!!!!!!!! %d\n---\n", incumbent->tid);
 
 	if(incumbent==NULL)
-		return FAILED;
+		return failed("NULL INCUMBENT AT CJOIN");;
 
 
 	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
 	if(being_waited(tid)==FAILED)
 	{
-		incumbent->dormant=t_a_bola_da_vez->tid;
+		incumbent->dormant=t_incumbent->tid;
 
 		int result = block_current_thread() + schedule_next_thread();
 		// return block_current_thread() + schedule_next_thread();
@@ -589,49 +558,50 @@ int cjoin(int tid) {
 	return FAILED;
 }
 
-int csem_init(csem_t *sem, int count) {
-	init();
-
-	sem->count = count;
-	PFILA2 p_semaphore = alloc_queue();
-	if( CreateFila2(p_semaphore) != SUCCESS ) {
-		printf("ERROR: could not initialize semaphore queue\n");
-		free(p_semaphore);
-		sem->fila = NULL;
-		return FAILED;
-	}
-	else {
-		sem->fila = p_semaphore;
-		return SUCCESS;
-	}
-}
-
 int demote_incumbent_to(int new_state) {
-	t_a_bola_da_vez->prio = stopTimer();
-	if(removeByTID(&Q_Exec, t_a_bola_da_vez->tid) != SUCCESS)
-		return FAILED;
+	t_incumbent->prio = stopTimer();
+	if(removeByTID(&Q_Exec, t_incumbent->tid) != SUCCESS)
+		return failed("FAILED DEMOTE 1");
 
 	switch(new_state) {
 
 		case PROCST_APTO:
-							if(emplace_in_queue(&Q_Ready, t_a_bola_da_vez) != SUCCESS)
-									return FAILED;
-							t_a_bola_da_vez->state = new_state;
+							if(emplace_in_queue(&Q_Ready, t_incumbent) != SUCCESS)
+									return failed("FAILED DEMOTE 2");
+							t_incumbent->state = new_state;
+							getcontext(&t_incumbent->context);
 							return SUCCESS;
 
 		case PROCST_BLOQ:
-							if(emplace_in_queue(&Q_Blocked, t_a_bola_da_vez) != SUCCESS)
-									return FAILED;
-							t_a_bola_da_vez->state = new_state;
-							// getcontext(&t_a_bola_da_vez);
+							if(emplace_in_queue(&Q_Blocked, t_incumbent) != SUCCESS)
+									return failed("FAILED DEMOTE 3");
+							t_incumbent->state = new_state;
+							getcontext(&t_incumbent->context);
 							return SUCCESS;
 
 		case PROCST_TERMINO:
-							t_a_bola_da_vez->state = new_state;
+							t_incumbent->state = new_state;
 							//provavelmente desalocar ?
 							return SUCCESS;
 		default:
-				return FAILED;
+				return failed("FAILED DEMOTE 4");
+	}
+}
+
+
+int csem_init(csem_t *sem, int count) {
+	init();
+
+	sem->count = count;
+	sem->fila  = alloc_queue();
+	if( CreateFila2(sem->fila) != SUCCESS ) {
+		printf("ERROR: could not initialize semaphore queue\n");
+		free(sem->fila);
+		sem->fila = NULL;
+		return FAILED;
+	}
+	else {
+		return SUCCESS;
 	}
 }
 
@@ -646,7 +616,7 @@ int cwait(csem_t *sem) {
 
 		if(demote_incumbent_to(PROCST_BLOQ) == SUCCESS) {
 		// if(block_current_thread == SUCCESS) {
-			if(emplace_in_queue(sem->fila, t_a_bola_da_vez) == SUCCESS) {
+			if(emplace_in_queue(sem->fila, t_incumbent) == SUCCESS) {
 				sem->count -= 1;
 				return(schedule_next_thread());
 			}
@@ -671,14 +641,18 @@ int csignal(csem_t *sem) {
 	TCB_t* p_thread;
 	p_thread = pop_queue(sem->fila);
 	if (p_thread != NULL) {
-		if( removeByTID(&Q_Blocked, p_thread->tid)==SUCCESS
-	   && emplace_in_queue(&Q_Ready, p_thread) == SUCCESS) {
+		int removal_code = removeByTID(&Q_Blocked, p_thread->tid);
+		int emplace_code = emplace_in_queue(&Q_Ready, p_thread);
+		if( (removal_code==SUCCESS) && (emplace_code == SUCCESS)) {
 			p_thread->state = PROCST_APTO;
 			return SUCCESS;
 		}
-		else return FAILED;
+		else return(failed("FAILED CSIGNAL A"));
 	}
-	else return FAILED;
+	else {
+		printf("Ninguem tava esperando no semaforo.\n");
+		return SUCCESS;
+	}
 }
 
 int cidentify (char *name, int size) {
