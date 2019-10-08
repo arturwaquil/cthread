@@ -147,11 +147,6 @@ void init() {
 	}
 }
 
-void return_to_main() {
-	printf("Retornei?\n");
-	return;
-}
-
 void print_queue(PFILA2 p_queue) {
 	if (!is_valid(p_queue))
 		print("PRINT QUEUE Invalid priority queue");
@@ -627,10 +622,8 @@ int cwait(csem_t *sem) {
 	}
 	else {
 		// RESOURCE AVAILABLE, no need to wait at the semaphore
-		// nao sei o que fazer aqui com essa informacao./glm
 		sem->count -= 1;
 		return SUCCESS;
-		//supostamente ja ta executando entao acho q eh isso? /glm
 	}
 }
 
@@ -642,13 +635,8 @@ int csignal(csem_t *sem) {
 	TCB_t* p_thread;
 	p_thread = pop_queue(sem->fila);
 	if (p_thread != NULL) {
-		int removal_code = removeByTID(&Q_Blocked, p_thread->tid);
-		int emplace_code = emplace_in_queue(&Q_Ready, p_thread);
-		if( (removal_code==SUCCESS) && (emplace_code == SUCCESS)) {
-			p_thread->state = PROCST_APTO;
-			return SUCCESS;
-		}
-		else return(failed("FAILED CSIGNAL A"));
+		p_thread->state = PROCST_APTO;
+		return remove_emplace(p_thread, &Q_Blocked, &Q_Ready);
 	}
 	else {
 		printf("Ninguem tava esperando no semaforo.\n");

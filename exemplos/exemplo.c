@@ -11,6 +11,7 @@
 #include "../include/support.h"
 #include "../include/cthread.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 csem_t* semaforo;
 
