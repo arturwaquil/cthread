@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define SUCCESS 0
+
 csem_t* semaforo;
 
 void* f1(void *arg) {
@@ -65,7 +67,7 @@ int main(int argc, char *argv[]) {
 		print("Deu certo");
 	else print("Deu failed");
 
-	//semaforo = (csem_t*)malloc(sizeof(csem_t));
+	semaforo = (csem_t*)malloc(sizeof(csem_t));
 	if(csem_init(semaforo, 1)==SUCCESS)
 		print("INICIALIZOU!");
 	else print("NAO CONSEGUIU INICIALIZAR");
