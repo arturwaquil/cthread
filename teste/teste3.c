@@ -42,6 +42,54 @@ void func4() {
 	printf("[%d]: STOP\n", 4);
 }
 
+// filas
+// sem1 : +th2(func1), -th4(func2)
+// sem2 : -th1(func3),
+// sem3: -th3(func4),
+// sem 4: -MAIN,
+
+
+/* execucao:
+MAIN entra em sleep sem4,
+escalona th1 func3
+th1 printa START 3
+th1 entra sleep sem2
+escalona th2 func1
+th2 printa START 1,
+printa == 1 ==
+th2 LIBERA/INCREMENTA semaforo 1 !! (QUE AINDA NAO TINHA NINGUEM NA FILA)
+th2 printa STOP 1 e termina
+escalona th3 func4
+th3 printa START 4
+th3 dorme em sem3
+escalona th4 func2
+th4 printa START 2
+th4 REQUERE SEMAFORO 1 -> ESTAVA COUNT 1, ATRIBUI O RECURSO
+th4 printa == 2 ==
+th4 LIBERA/INCREMENTA SEM2 (QUE TINHA A th1 ESPERANDO->acorda e poe em apto )
+th4 printa STOP 2 e termina
+
+[nesse momento, quem executou mais: MAIN > th4 > th2 > th1(fcfs) == th3]
+porém th3 e main estao bloqueadas, e th4 e th2 terminaram.
+UNICA APTA : th1 (também seria a melhor)
+escalona th1 func3, estava esperando sem2 mas foi acordada
+th1 printa == 3 ==
+th1 LIBERA/INCREMENTA sem3 -> tinha a th3 esperando, acorda th3 e poe APTO
+th1 printa STOP 3 e termina.
+
+escalona th3 (func4), única acordada.
+th3 entra na SC, printa == 4 ==
+th3 LIBERA/INCREMENTA sem4 ---> tinha a MAIN esperando, acorda e torna apta
+th3 printa STOP 4 e termina
+
+única apta e viva para escalonar  é MAIN
+printa MAIN STOPPED.
+
+fimm
+
+
+
+*/
 int main(){
 	csem_init(&sem1, 0);
 	csem_init(&sem2, 0);

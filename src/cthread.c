@@ -25,7 +25,7 @@ void	print_queue_ready();
 void	print_queue_bloq();
 void	print_queue_exec();
 int		emplace_in_queue(PFILA2, TCB_t*);
-int		removeByTID(PFILA2 p_queue, int tid);
+int		remove_from_queue(PFILA2 p_queue, int tid);
 TCB_t*	pop_queue(PFILA2 p_queue);
 TCB_t*	make_thread(int);
 //int	ccreate (void* (*start)(void*), void *arg, int prio);
@@ -53,7 +53,6 @@ int		demote_incumbent_to(int new_state);
 int lib_initialized = 0;
 
 ucontext_t terminate;
-
 TCB_t t_main;
 TCB_t* t_incumbent; // Points to thread currently executing.
 int num_threads = 0; // Qty of thread instances; doubles as tid generator.
@@ -62,11 +61,6 @@ int num_threads = 0; // Qty of thread instances; doubles as tid generator.
 FILA2 Q_Ready; // Processes ready to run when the CPU becomes available.
 FILA2 Q_Blocked; // Processes blocked and waiting sync.
 FILA2 Q_Exec; // Process[es] running at a given time.
-
-// Notação,SUGESTÕES:
-// threads começam com t_coisa, queues com Q_Coisa
-// ponteiros em argumentos e variaveis em funcoes com p_coisa
-// semáforos com s_coisa ou x_coisa (muteX)
 
 int generate_tid() {
 	num_threads++;
@@ -202,7 +196,7 @@ int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 	}
 }
 
-int removeByTID(PFILA2 p_queue, int tid) {
+int remove_from_queue(PFILA2 p_queue, int tid) {
 	int code ;
 	if (!is_valid(p_queue))
 		return (failed("Invalid priority queue"));
@@ -322,7 +316,7 @@ int schedule_next_thread() {
 
 int remove_emplace(TCB_t* thread, PFILA2 from_queue, PFILA2 to_queue) {
 
-	int removal_code = removeByTID(from_queue, thread->tid);
+	int removal_code = remove_from_queue(from_queue, thread->tid);
 	int emplace_code = emplace_in_queue(to_queue, thread);
 	if ((removal_code == SUCCESS) && (emplace_code == SUCCESS)){
 		return SUCCESS;
@@ -378,7 +372,7 @@ void terminate_current_thread() {
 		}
 	}
 
-	if(removeByTID(&Q_Exec, t_incumbent->tid) == SUCCESS) {
+	if(remove_from_queue(&Q_Exec, t_incumbent->tid) == SUCCESS) {
 
 		free(t_incumbent->context.uc_stack.ss_sp);
 		free(t_incumbent);
@@ -406,7 +400,7 @@ int cpop_ready() {
 
 void cremove_ready(int tid) {
 	printf("\nCalled removal of tid %d\n",tid);
-	removeByTID(&Q_Ready, tid);
+	remove_from_queue(&Q_Ready, tid);
 
 	print("Queue after call to remove element: ");
 	print_queue(&Q_Ready);
@@ -507,7 +501,7 @@ int cyield() {
 	int code2 = schedule_next_thread();
 
 	if ( (code1 == SUCCESS) && (code2 == SUCCESS)) {
-			printf("Retorno cyield: %d e %d\n", code1, code2 );
+			//printf("Retorno cyield: %d e %d\n", code1, code2 );
 			return SUCCESS;
 		}
 	else return failed("ERROR: Could not context swap after cyield");
@@ -522,11 +516,9 @@ int cjoin(int tid) {
 	// -Else:
 	//  The CALLER/WAITER thread, which is executing,
 	//   becomes a blocked thread (Blocked Q);
-	//  The joining intent is registered on the WAITED thread,
-	//   (somehow);
+	//  The joining intent is registered on the WAITED thread
 	//  Once WAITED is finished executing,
 	//   CALLER is woken from cryo-sleep and put in Ready Q;
-	//
 
 	TCB_t* incumbent = find(tid);
 
@@ -544,7 +536,7 @@ int cjoin(int tid) {
 		int code2 = schedule_next_thread();
 
 		if ( (code1 == SUCCESS) && (code2 == SUCCESS)) {
-				printf("Retorno cjoin: %d e %d\n", code1, code2 );
+				//printf("Retorno cjoin: %d e %d\n", code1, code2 );
 				return SUCCESS;
 			}
 		else return failed("ERROR: Could not context swap after cjoin");
@@ -554,7 +546,7 @@ int cjoin(int tid) {
 
 int demote_incumbent_to(int new_state) {
 	t_incumbent->prio = stopTimer();
-	if(removeByTID(&Q_Exec, t_incumbent->tid) != SUCCESS)
+	if(remove_from_queue(&Q_Exec, t_incumbent->tid) != SUCCESS)
 		return failed("FAILED DEMOTE 1");
 
 	switch(new_state) {
