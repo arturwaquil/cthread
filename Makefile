@@ -27,7 +27,7 @@ $(BIN_DIR)/cthread.o: $(SRC_DIR)/cthread.c
 
 
 tar:
-	@cd .. && tar -zcvf nome.tar.gz cthread
+	@cd .. && tar -zcvf 287677_207758_299902.tar.gz cthread
 
 clean:
 	mv $(BIN_DIR)/support.o ../
