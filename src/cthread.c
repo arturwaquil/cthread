@@ -105,9 +105,9 @@ TCB_t* alloc_thread() {
 
 void init() {
 	if (!lib_initialized){
-		
+
 		print("inicializando cthread...");
-		
+
 		Q_Ready		=  *alloc_queue();
 		Q_Blocked	=  *alloc_queue();
 		Q_Exec		=  *alloc_queue();
@@ -136,7 +136,7 @@ void init() {
 		emplace_in_queue(&Q_Exec, t_incumbent);
 		startTimer();
 		t_main.state = PROCST_EXEC;
-		
+
 		lib_initialized = 1;
 	}
 }
@@ -390,7 +390,7 @@ void terminate_current_thread() {
 		// ABORT. Cannot terminate thread. Q_Exec is empty
 		exit(EXIT_FAILURE);
 	}
-	
+
 
 }
 
@@ -493,7 +493,7 @@ TCB_t* find(int tid) {
 
 	p_thread = search_queue(&Q_Exec, tid);
 	return p_thread;
-	
+
 	// returns NULL if tid is not found in any queue
 
 }
@@ -638,12 +638,10 @@ int csignal(csem_t *sem) {
 
 int cidentify (char *name, int size) {
 	char *nomes = "Artur Waquil Campana\t00287677\nGiovanna Lazzari Miotto\t00207758\nHenrique Chaves Pacheco\t00299902\n\0";
-	
 	if (size < strlen(nomes)) {
-		printf("ERROR: size is too small\n");
+		printf("ERROR: identification requires size %d or larger.\n", strlen(nomes));
 		return FAILED;
 	}
 	else strncpy(name, nomes, size);
-	
 	return SUCCESS;
 }
