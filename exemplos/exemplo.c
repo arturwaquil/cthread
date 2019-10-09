@@ -11,6 +11,7 @@
 #include "../include/support.h"
 #include "../include/cthread.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 csem_t* semaforo;
 
@@ -48,7 +49,7 @@ int main(int argc, char *argv[]) {
 	print_queue_ready();print("");
 
 	print("=>MAIN vai esperar as threads");
-	cjoin(id1);
+	printf("%d\n", cjoin(id1));
 	print("=>MAIN deu join na F1");
 	cjoin(id2);
 	print("=>MAIN deu join na F2");
