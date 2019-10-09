@@ -28,7 +28,6 @@ int		emplace_in_queue(PFILA2, TCB_t*);
 int		remove_from_queue(PFILA2 p_queue, int tid);
 TCB_t*	pop_queue(PFILA2 p_queue);
 TCB_t*	make_thread(int);
-//int	ccreate (void* (*start)(void*), void *arg, int prio);
 int		schedule_next_thread();
 int		remove_emplace(TCB_t* thread, PFILA2 from_queue, PFILA2 to_queue);
 int		unschedule_current_thread();
@@ -474,6 +473,8 @@ TCB_t* search_queue(PFILA2 p_queue, int tid) {
 }
 
 TCB_t* find(int tid) {
+	// Traverses all queues to find thread with given TID.
+	// Returns NULL if none found.
 
 	TCB_t* p_thread;
 
@@ -486,98 +487,51 @@ TCB_t* find(int tid) {
 		return p_thread;
 
 	p_thread = search_queue(&Q_Exec, tid);
-	return p_thread;
-
-	// returns NULL if tid is not found in any queue
+	return p_thread;	// returns NULL if tid is not found in any queue
 
 }
 
 int cyield() {
-	init();
-	// Yield takes the executing thread from the EXEC queue,
-	// and places it into the ready queue with state = ready;
-	// Then it calls the scheduler to promote another thread to EXEC.
+	init(); // Initializes cthread.
+
+	// Incumbent yields its processing spot (Exec -> Ready)
+	// Scheduler schedules next running thread.
+
 	int code1 = unschedule_current_thread();
 	int code2 = schedule_next_thread();
-
 	if ( (code1 == SUCCESS) && (code2 == SUCCESS)) {
-			//printf("Retorno cyield: %d e %d\n", code1, code2 );
 			return SUCCESS;
 		}
 	else return failed("ERROR: Could not context swap after cyield");
 }
 
 int cjoin(int tid) {
-	init();
-	// A thread calls cjoin to wait on another with identifier "tid".
-	// -If "tid" does not exist or finished exec, return ERROR CODE.
-	// -If two or more threads wait for "tid", the first is served and
-	//  the latter ones receive ERROR CODE immediately.
-	// -Else:
-	//  The CALLER/WAITER thread, which is executing,
-	//   becomes a blocked thread (Blocked Q);
-	//  The joining intent is registered on the WAITED thread
-	//  Once WAITED is finished executing,
-	//   CALLER is woken from cryo-sleep and put in Ready Q;
+	init(); // Initializes cthread.
 
-	TCB_t* incumbent = find(tid);
-
-	// printf("---\nincumbet!!!!!!!!!!! %d\n---\n", incumbent->tid);
-
-	if(incumbent==NULL)
-		//return failed("NULL INCUMBENT AT CJOIN");;
+	// Incumbent called to wait on thread "tid"
+	TCB_t* awaited = find(tid);
+	if( awaited == NULL) // "tid" does not exist (not found in any queue).
 		return FAILED;
 
-	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
-	if(being_waited(tid)==FAILED)
+	// Only one thread may be waiting for "tid" at once.
+	if(being_waited(tid) == FAILED)
+	// "Tid" was previously not joined to anyone.
 	{
-		incumbent->dormant=t_incumbent->tid;
+		// Incumbent is registered as DORMANT & waiting for the awaited thread.
+		awaited->dormant = t_incumbent->tid;
+
 		int code1 = block_current_thread();
 		int code2 = schedule_next_thread();
-
 		if ( (code1 == SUCCESS) && (code2 == SUCCESS)) {
-				//printf("Retorno cjoin: %d e %d\n", code1, code2 );
 				return SUCCESS;
 			}
-		else return failed("ERROR: Could not context swap after cjoin");
+		else return failed("ERROR: Could not context swap after joining threads.");
 	}
-	return FAILED;
+	return FAILED; // Some thread is already joined to AWAITED.
 }
-
-int demote_incumbent_to(int new_state) {
-	t_incumbent->prio = stopTimer();
-	if(remove_from_queue(&Q_Exec, t_incumbent->tid) != SUCCESS)
-		return failed("FAILED DEMOTE 1");
-
-	switch(new_state) {
-
-		case PROCST_APTO:
-							if(emplace_in_queue(&Q_Ready, t_incumbent) != SUCCESS)
-									return failed("FAILED DEMOTE 2");
-							t_incumbent->state = new_state;
-							getcontext(&t_incumbent->context);
-							return SUCCESS;
-
-		case PROCST_BLOQ:
-							if(emplace_in_queue(&Q_Blocked, t_incumbent) != SUCCESS)
-									return failed("FAILED DEMOTE 3");
-							t_incumbent->state = new_state;
-							getcontext(&t_incumbent->context);
-							return SUCCESS;
-
-		case PROCST_TERMINO:
-							t_incumbent->state = new_state;
-							//provavelmente desalocar ?
-							return SUCCESS;
-		default:
-				return failed("FAILED DEMOTE 4");
-	}
-}
-
 
 int csem_init(csem_t *sem, int count) {
-
-	init();
+	init(); // Initializes cthread.
 
 	if(sem == NULL){
 		print("ERROR: could not initialize semaphore (invalid pointer).");
@@ -614,46 +568,42 @@ int is_valid_semaphore(csem_t* sem) {
 }
 
 int cwait(csem_t *sem) {
-	// VALIDATION
-	// cthreads initialized:
-	init();
-	// semaphore initialized:
+	init(); // Initializes cthread.
+	// Semaphore must have been initialized beforehand.
 	if(!is_valid_semaphore(sem))
 		return failed("ERROR: semaphore not initialized.");
 
 	// A waiting call always decrements the resource count
-	// (this is being done after guaranteeing that the thread
-	// has been blocked and emplaced in the semaphore queue)
-	if(sem->count <= 0) {
+	sem->count -= 1;
+	if(sem->count < 0) {
 		// Resource count was already nonpositive before this call;
-		// Caller thread must wait at the semaphore.
+		// Caller must wait at the semaphore.
+		if( (block_current_thread() == SUCCESS)
+			&& (emplace_in_queue(sem->fila, t_incumbent) == SUCCESS) ) {
 
-		if(demote_incumbent_to(PROCST_BLOQ) == SUCCESS) {
-		// if(block_current_thread == SUCCESS) {
-			if(emplace_in_queue(sem->fila, t_incumbent) == SUCCESS) {
-				sem->count -= 1;
 				return(schedule_next_thread());
-			}
-			else return(failed("FAILED CWAIT 1"));
 		}
-		else return(failed("FAILED CWAIT 2"));
+		else return(failed("FAILED CWAIT 1"));
 	}
 	else {
-		// RESOURCE AVAILABLE, no need to wait at the semaphore
-		sem->count -= 1;
+		// There was a free spot available for the caller.
 		return SUCCESS;
 	}
 }
 
 int csignal(csem_t *sem) {
-	init();
-	if(! is_valid_semaphore(sem))
+	init(); // Initializes cthread.
+	// Semaphore must have been initialized beforehand.
+	if( !is_valid_semaphore(sem))
 		return failed("ERROR: semaphore not initialized.");
-	// Thread currently executing is leaving a critical section.
-	// The resource count is incremented as the resource is freed.
-	sem->count += 1;
+
+	sem->count += 1; // A signal always increments resource.
+
+	// Pops semaphore queue.
+	// If empty do nothing else, otherwise wake the first thread from BLOCKED to READY.
 	TCB_t* p_thread;
 	p_thread = pop_queue(sem->fila);
+
 	if (p_thread != NULL) {
 		p_thread->state = PROCST_APTO;
 		return remove_emplace(p_thread, &Q_Blocked, &Q_Ready);
@@ -667,7 +617,7 @@ int csignal(csem_t *sem) {
 int cidentify (char *name, int size) {
 	char *nomes = "Artur Waquil Campana\t00287677\nGiovanna Lazzari Miotto\t00207758\nHenrique Chaves Pacheco\t00299902\n\0";
 	if (size < strlen(nomes)) {
-		printf("ERROR: identification requires size %d or larger.\n", strlen(nomes));
+		printf("ERROR: identification requires size %lu or larger.\n", strlen(nomes));
 		return FAILED;
 	}
 	else strncpy(name, nomes, size);
