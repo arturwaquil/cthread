@@ -106,28 +106,6 @@ void init() {
 		t_main.prio = DEFAULT_PRIO;
 		t_main.dormant = -1;
 
-		//set main thread's context
-		// getcontext(&(t_main.context));
-		// char stack[SIGSTKSZ];
-		// t_main.context.uc_link = 0;
-		// t_main.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-		// t_main.context.uc_stack.ss_size = sizeof(stack);
-		// makecontext(&(t_main.context), (void (*)(void))schedule_next_thread, 0);
-
-		// getcontext(&(scheduler));
-		// char stack[SIGSTKSZ];
-		// scheduler.uc_link = 0;
-		// scheduler.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-		// scheduler.uc_stack.ss_size = sizeof(stack);
-		// makecontext(&(scheduler), (void (*)(void))schedule_next_thread, 0);
-
-		//context set when threads context terminate, used on ccreate (uc_link definition)
-		// getcontext(&(t_terminate.context));
-		// t_terminate.context.uc_link = 0;
-		// t_terminate.context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-		// t_terminate.context.uc_stack.ss_size = sizeof(stack);
-		// makecontext(&(t_terminate.context), (void (*)(void))terminate_current_thread, 0);
-
 		getcontext(&terminate);
 		char stack[SIGSTKSZ];
 		terminate.uc_link = 0;
@@ -137,7 +115,6 @@ void init() {
 
 		getcontext(&t_main.context);
 
-		// printf("daqui eu volto para a main?\n");
 		t_incumbent = &t_main;
 		emplace_in_queue(&Q_Exec, t_incumbent);
 		startTimer();
@@ -145,11 +122,6 @@ void init() {
 		
 		lib_initialized = 1;
 	}
-}
-
-void return_to_main() {
-	printf("Retornei?\n");
-	return;
 }
 
 void print_queue(PFILA2 p_queue) {
@@ -259,6 +231,9 @@ TCB_t* pop_queue(PFILA2 p_queue) {
 TCB_t* make_thread(int prio) {
 
 	TCB_t* p_thread = alloc_thread();
+	if(p_thread == NULL)
+		return NULL;
+
 	p_thread->tid = generate_tid();
 	p_thread->state = PROCST_APTO;
 	p_thread->prio = prio;
@@ -272,7 +247,11 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 	// NOTE: argument "prio" ignored; defaults to zero upon creation
 	init();
 	TCB_t* p_thread = make_thread(prio);
-	printf("criando thread %d\n", p_thread->tid);
+	if(p_thread == NULL)
+		return FAILED;
+
+	// printf("criando thread %d\n", p_thread->tid);
+
 	// Fazer coisa de Contexto com a função passada pelo start,
 	// para o sistema da maq virtual rodar pra nós. /glm
 
@@ -283,6 +262,9 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 
 	char stack[SIGSTKSZ];
 	p_thread->context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+	if(p_thread->context.uc_stack.ss_sp == NULL)
+		return FAILED;
+
 	p_thread->context.uc_stack.ss_size = sizeof(stack);
 	makecontext(&(p_thread->context), (void (*)(void))start, 1, arg);
 
@@ -377,14 +359,13 @@ int unblock_current_dormant(int tid) {
 }
 
 void terminate_current_thread() {
-	printf("terminando execucao da thread %d\n", t_incumbent->tid);
-
+	// printf("terminando execucao da thread %d\n", t_incumbent->tid);
 	t_incumbent->prio = stopTimer();
 
-	//acorda a thread dorment
+	//acorda a thread dormant
 	if(t_incumbent->dormant!=-1)
 	{
-		printf("vou acordar a thread %d\n", t_incumbent->dormant);
+		// printf("vou acordar a thread %d\n", t_incumbent->dormant);
 		if(unblock_current_dormant(t_incumbent->dormant)==FAILED)
 		{
 			print("Could not wake thread up");
@@ -393,18 +374,16 @@ void terminate_current_thread() {
 	}
 
 	if(removeByTID(&Q_Exec, t_incumbent->tid) == SUCCESS) {
-		// if(emplace_in_queue(&Q_Ready, t_incumbent) == SUCCESS) {
-		// 	t_incumbent->state = PROCST_APTO;
-		// 	return SUCCESS;
-		// }
-		print("");
-		t_incumbent->state = PROCST_APTO;
+
+		free(t_incumbent->context.uc_stack.ss_sp);
+		free(t_incumbent);
+
 		schedule_next_thread();
 	}
 	else
 	{
-		print("ABORT. Cannot terminate thread. Q_Exec is empty");
-
+		// ABORT. Cannot terminate thread. Q_Exec is empty
+		exit(EXIT_FAILURE);
 	}
 	
 
@@ -538,7 +517,9 @@ int cjoin(int tid) {
 	//  Once WAITED is finished executing,
 	//   CALLER is woken from cryo-sleep and put in Ready Q;
 	//
+
 	TCB_t* incumbent = find(tid);
+
 	// printf("---\nincumbet!!!!!!!!!!! %d\n---\n", incumbent->tid);
 
 	if(incumbent==NULL)
