@@ -30,11 +30,11 @@ void* f2(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
-	
+
 	char *name = (char*)malloc(300*sizeof(char*));
 	cidentify(name, 300);
 	printf("%s\n", name);
-	
+
 	int id1, id2;
 	int i = 10;
 
@@ -53,6 +53,35 @@ int main(int argc, char *argv[]) {
 	print("=>MAIN deu join na F1");
 	cjoin(id2);
 	print("=>MAIN deu join na F2");
+
+
+	print("=>MAIN vai tentar cwait sem init");
+	if(cwait(semaforo)==SUCCESS)
+		print("Deu certo");
+	else print("Deu failed");
+
+	print("=>MAIN vai tentar csignal sem init");
+	if(csignal(semaforo)==SUCCESS)
+		print("Deu certo");
+	else print("Deu failed");
+
+	//semaforo = (csem_t*)malloc(sizeof(csem_t));
+	if(csem_init(semaforo, 1)==SUCCESS)
+		print("INICIALIZOU!");
+	else print("NAO CONSEGUIU INICIALIZAR");
+
+	print("=>MAIN vai tentar cwait APOS INIT");
+
+	if(cwait(semaforo)==SUCCESS)
+		print("Deu certo");
+	else print("Deu failed");
+
+	print("=>MAIN vai tentar csignal APOS INIT");
+
+	if(csignal(semaforo)==SUCCESS)
+		print("Deu certo");
+	else print("Deu failed");
+
 
 	print("=>MAIN terminando");
 	print("");

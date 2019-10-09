@@ -503,11 +503,14 @@ int cyield() {
 	// Yield takes the executing thread from the EXEC queue,
 	// and places it into the ready queue with state = ready;
 	// Then it calls the scheduler to promote another thread to EXEC.
-	int retorno = unschedule_current_thread();
-	int retorno2 = schedule_next_thread();
-	printf("Retornos cyield: unschedule %d, schedule %d\n", retorno, retorno2);
-	return (retorno + retorno2);
-	// Isso eh naughty d+ e provavelmente vou mudar /glm
+	int code1 = unschedule_current_thread();
+	int code2 = schedule_next_thread();
+
+	if ( (code1 == SUCCESS) && (code2 == SUCCESS)) {
+			printf("Retorno cyield: %d e %d\n", code1, code2 );
+			return SUCCESS;
+		}
+	else return failed("ERROR: Could not context swap after cyield");
 }
 
 int cjoin(int tid) {
@@ -533,18 +536,19 @@ int cjoin(int tid) {
 		//return failed("NULL INCUMBENT AT CJOIN");;
 		return FAILED;
 
-
 	// checar se ha alguma outra thread em espera por essa thread (senao retorna failed)
 	if(being_waited(tid)==FAILED)
 	{
 		incumbent->dormant=t_incumbent->tid;
-
 		int code1 = block_current_thread();
 		int code2 = schedule_next_thread();
-		printf("cjoin retorno : result %d result2 %d\n", result, result2 );
-		return (code1 + code2);
-	}
 
+		if ( (code1 == SUCCESS) && (code2 == SUCCESS)) {
+				printf("Retorno cjoin: %d e %d\n", code1, code2 );
+				return SUCCESS;
+			}
+		else return failed("ERROR: Could not context swap after cjoin");
+	}
 	return FAILED;
 }
 
@@ -580,12 +584,18 @@ int demote_incumbent_to(int new_state) {
 
 
 int csem_init(csem_t *sem, int count) {
+
 	init();
+
+	if(sem == NULL){
+		print("ERROR: could not initialize semaphore (invalid pointer).");
+		return FAILED;
+	}
 
 	sem->count = count;
 	sem->fila  = alloc_queue();
 	if( CreateFila2(sem->fila) != SUCCESS ) {
-		printf("ERROR: could not initialize semaphore queue\n");
+		printf("ERROR: could not create semaphore queue.\n");
 		free(sem->fila);
 		sem->fila = NULL;
 		return FAILED;
@@ -595,8 +605,30 @@ int csem_init(csem_t *sem, int count) {
 	}
 }
 
+int is_valid_semaphore(csem_t* sem) {
+	if (sem == NULL){
+		print("SEMAFORO: PONTEIRO NULO");
+		return 0;
+	}
+	if (sem->fila == NULL){
+		print("SEMAFORO: PONTEIRO DA FILA NULO");
+		return 0;
+	}
+	if (!is_valid(sem->fila)){
+		print("SEMAFORO: QUEUE INVALIDA");
+		return 0;
+	}
+	return 1;
+}
+
 int cwait(csem_t *sem) {
+	// VALIDATION
+	// cthreads initialized:
 	init();
+	// semaphore initialized:
+	if(!is_valid_semaphore(sem))
+		return failed("ERROR: semaphore not initialized.");
+
 	// A waiting call always decrements the resource count
 	// (this is being done after guaranteeing that the thread
 	// has been blocked and emplaced in the semaphore queue)
@@ -623,6 +655,8 @@ int cwait(csem_t *sem) {
 
 int csignal(csem_t *sem) {
 	init();
+	if(! is_valid_semaphore(sem))
+		return failed("ERROR: semaphore not initialized.");
 	// Thread currently executing is leaving a critical section.
 	// The resource count is incremented as the resource is freed.
 	sem->count += 1;
