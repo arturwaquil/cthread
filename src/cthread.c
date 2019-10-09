@@ -539,8 +539,10 @@ int cjoin(int tid) {
 	{
 		incumbent->dormant=t_incumbent->tid;
 
-		int result = block_current_thread() + schedule_next_thread();
-		return result;
+		int code1 = block_current_thread();
+		int code2 = schedule_next_thread();
+		printf("cjoin retorno : result %d result2 %d\n", result, result2 );
+		return (code1 + code2);
 	}
 
 	return FAILED;
