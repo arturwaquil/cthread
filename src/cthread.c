@@ -31,7 +31,7 @@ TCB_t*	make_thread(int);
 int		schedule_next_thread();
 int		remove_emplace(TCB_t* thread, PFILA2 from_queue, PFILA2 to_queue);
 int		unschedule_current_thread();
-int		block_current_thread();
+int		block_current_thread(unsigned int);
 int		unblock_current_dormant(int tid);
 void	terminate_current_thread();
 int		cpop_ready();
@@ -278,17 +278,16 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 
 int schedule_next_thread() {
 	//Selects next thread
+	print_queue_ready();
 	t_incumbent = pop_queue(&Q_Ready);
 
 	if(t_incumbent != NULL ) {
 		//Insert next thread in the Q_Exec
 		if (emplace_in_queue(&Q_Exec, t_incumbent) == SUCCESS) {
 			t_incumbent->state = PROCST_EXEC;
-			startTimer();
-
 			//sets next thread's context
 			setcontext(&t_incumbent->context);
-
+			startTimer();
 			return SUCCESS;
 		}
 		else
@@ -313,7 +312,7 @@ int remove_emplace(TCB_t* thread, PFILA2 from_queue, PFILA2 to_queue) {
 
 int unschedule_current_thread() {
 	//Stops running thread timer
-	t_incumbent->prio = stopTimer();
+	t_incumbent->prio = (int)stopTimer();
 
 	//Swaps running thread queue from Q_Exec to Q_Ready and saves its context
 	if( remove_emplace(t_incumbent, &Q_Exec, &Q_Ready) == SUCCESS) {
@@ -324,9 +323,9 @@ int unschedule_current_thread() {
 	else return failed("Failed Unschedule curr");
 }
 
-int block_current_thread() {
+int block_current_thread(unsigned int time) {
 	//Stops running thread timer
-	t_incumbent->prio = stopTimer();
+	t_incumbent->prio = (int)time;
 
 	//Swaps running thread queue from Q_Exec to Q_Blocked and saves its context
 	if( remove_emplace(t_incumbent, &Q_Exec, &Q_Blocked) == SUCCESS) {
@@ -351,7 +350,7 @@ int unblock_current_dormant(int tid) {
 }
 
 void terminate_current_thread() {
-	t_incumbent->prio = stopTimer(); //Stops running thread timer
+	t_incumbent->prio = (int)stopTimer(); //Stops running thread timer
 	t_incumbent->state = PROCST_TERMINO;
 	//Wakes up dormant thread, if any
 	if(t_incumbent->dormant!=-1)
@@ -498,10 +497,15 @@ int cyield() {
 int cjoin(int tid) {
 	init(); // Initializes cthread.
 
+	unsigned int time_at_call = stopTimer();
+
+	printf("STOP TIMER: %u\n", time_at_call);
+
 	// Incumbent called to wait on thread "tid"
 	TCB_t* awaited = find(tid);
 	if( awaited == NULL) // "tid" does not exist (not found in any queue).
 		return FAILED;
+
 
 	// Only one thread may be waiting for "tid" at once.
 	if(being_waited(tid) == FAILED)
@@ -510,7 +514,7 @@ int cjoin(int tid) {
 		// Incumbent is registered as DORMANT & waiting for the awaited thread.
 		awaited->dormant = t_incumbent->tid;
 
-		int code1 = block_current_thread();
+		int code1 = block_current_thread(time_at_call);
 		int code2 = schedule_next_thread();
 		if ( (code1 == SUCCESS) && (code2 == SUCCESS)) {
 				return SUCCESS;
@@ -559,6 +563,7 @@ int is_valid_semaphore(csem_t* sem) {
 
 int cwait(csem_t *sem) {
 	init(); // Initializes cthread.
+	unsigned int time_at_call = stopTimer();
 	// Semaphore must have been initialized beforehand.
 	if(!is_valid_semaphore(sem))
 		return failed("ERROR: semaphore not initialized.");
@@ -568,7 +573,7 @@ int cwait(csem_t *sem) {
 	if(sem->count < 0) {
 		// Resource count was already nonpositive before this call;
 		// Caller must wait at the semaphore.
-		if( (block_current_thread() == SUCCESS)
+		if( (block_current_thread(time_at_call) == SUCCESS)
 			&& (emplace_in_queue(sem->fila, t_incumbent) == SUCCESS) ) {
 
 				return(schedule_next_thread());
