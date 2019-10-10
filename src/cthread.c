@@ -254,22 +254,15 @@ TCB_t* make_thread(int prio) {
 }
 
 int ccreate (void* (*start)(void*), void *arg, int prio) {
-	// NOTE: argument "prio" ignored; defaults to zero upon creation
-	init();
+	init(); // Initializes cthread.
+
+	//Allocate thread data
 	TCB_t* p_thread = make_thread(prio);
 	if(p_thread == NULL)
 		return FAILED;
 
-	// printf("criando thread %d\n", p_thread->tid);
-
-	// Fazer coisa de Contexto com a função passada pelo start,
-	// para o sistema da maq virtual rodar pra nós. /glm
-
-	// p_thread->context.uc_link = 0;
-	// p_thread->context.uc_link = &t_main.context;
-	// p_thread->context.uc_link = &t_terminate.context;
+	//Initialize and allocate thread's context
 	p_thread->context.uc_link = &terminate;
-
 	char stack[SIGSTKSZ];
 	p_thread->context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
 	if(p_thread->context.uc_stack.ss_sp == NULL)
@@ -278,6 +271,7 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 	p_thread->context.uc_stack.ss_size = sizeof(stack);
 	makecontext(&(p_thread->context), (void (*)(void))start, 1, arg);
 
+	//Insert new thread in the Q_Ready
 	int code = emplace_in_queue(&Q_Ready, p_thread );
 	if(code != SUCCESS) {
 		printf("ERROR: could not insert new thread in ready queue. Freeing thread. \n");
@@ -285,23 +279,22 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 		return FAILED;
 	}
 	else {
-		// print_queue(&Q_Ready);
 		return p_thread->tid;
 	}
 }
 
 int schedule_next_thread() {
-
+	//Selects next thread
 	t_incumbent = pop_queue(&Q_Ready);
 
 	if(t_incumbent != NULL ) {
+		//Insert next thread in the Q_Exec
 		if (emplace_in_queue(&Q_Exec, t_incumbent) == SUCCESS) {
 			t_incumbent->state = PROCST_EXEC;
 			startTimer();
 
-			// printf("run-> %d\n", t_incumbent->tid);
+			//sets next thread's context
 			setcontext(&t_incumbent->context);
-			// swapcontext(&t_main.context, &t_incumbent->context);
 
 			return SUCCESS;
 		}
@@ -326,8 +319,10 @@ int remove_emplace(TCB_t* thread, PFILA2 from_queue, PFILA2 to_queue) {
 }
 
 int unschedule_current_thread() {
-	// printf("\n$$$$$$$$$$$$\nretirei da exec\n");
+	//Stops running thread timer
 	t_incumbent->prio = stopTimer();
+
+	//Swaps running thread queue from Q_Exec to Q_Ready and saves its context
 	if( remove_emplace(t_incumbent, &Q_Exec, &Q_Ready) == SUCCESS) {
 		t_incumbent->state = PROCST_APTO;
 		getcontext(&t_incumbent->context);
@@ -337,11 +332,13 @@ int unschedule_current_thread() {
 }
 
 int block_current_thread() {
+	//Stops running thread timer
 	t_incumbent->prio = stopTimer();
+
+	//Swaps running thread queue from Q_Exec to Q_Blocked and saves its context
 	if( remove_emplace(t_incumbent, &Q_Exec, &Q_Blocked) == SUCCESS) {
 			t_incumbent->state = PROCST_BLOQ;
 			getcontext(&t_incumbent->context);
-			// printf("bloqueei %d\n",t_incumbent->tid);
 			return SUCCESS;
 	}
 	else
@@ -349,7 +346,10 @@ int block_current_thread() {
 }
 
 int unblock_current_dormant(int tid) {
+	//Get blocked thread from Q_Blocked
 	TCB_t* p_thread = search_queue(&Q_Blocked, tid);
+
+	//Swaps blocked thread queue from Q_Blocked to Q_Ready and saves its context
 	if( remove_emplace(p_thread, &Q_Blocked, &Q_Ready) == SUCCESS) {
 		return SUCCESS;
 	}
@@ -357,13 +357,12 @@ int unblock_current_dormant(int tid) {
 }
 
 void terminate_current_thread() {
-	// printf("terminando execucao da thread %d\n", t_incumbent->tid);
+	//Stops runninng thread timer
 	t_incumbent->prio = stopTimer();
 
-	//acorda a thread dormant
+	//Wakes up dormant thread, if any
 	if(t_incumbent->dormant!=-1)
 	{
-		// printf("vou acordar a thread %d\n", t_incumbent->dormant);
 		if(unblock_current_dormant(t_incumbent->dormant)==FAILED)
 		{
 			print("Could not wake thread up");
@@ -371,11 +370,13 @@ void terminate_current_thread() {
 		}
 	}
 
+	//Remove running thread from Q_Exec
 	if(remove_from_queue(&Q_Exec, t_incumbent->tid) == SUCCESS) {
 
 		free(t_incumbent->context.uc_stack.ss_sp);
 		free(t_incumbent);
 
+		// calls scheduler
 		schedule_next_thread();
 	}
 	else
