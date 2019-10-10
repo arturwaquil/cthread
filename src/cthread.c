@@ -152,7 +152,6 @@ void print_queue(PFILA2 p_queue) {
 			code = NextFila2(p_queue);
 			p_current = GetAtIteratorFila2(p_queue);
 		}
-		// End queue.
 		print("PRINT QUEUE: Reached endqueue.");
 	}
 }
@@ -167,7 +166,6 @@ void print_queue_exec(){
 	print_queue(&Q_Exec);
 }
 
-// Queue insert
 int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 	int code;
 	if (!is_valid(p_queue))
@@ -190,7 +188,6 @@ int emplace_in_queue(PFILA2 p_queue, TCB_t* p_thread ) {
 				p_current = GetAtIteratorFila2(p_queue);
 			}
 		}
-		// END QUEUE
 		return AppendFila2(p_queue, p_thread);
 	}
 }
@@ -207,7 +204,6 @@ int remove_from_queue(PFILA2 p_queue, int tid) {
 		TCB_t* p_current = GetAtIteratorFila2(p_queue);
 		while (code != -NXTFILA_ENDQUEUE) {
 			if (p_current->tid == tid) {
-				// print("Achou tid, removendo");
 				return DeleteAtIteratorFila2(p_queue);
 			}
 			else {
@@ -215,14 +211,12 @@ int remove_from_queue(PFILA2 p_queue, int tid) {
 				p_current = GetAtIteratorFila2(p_queue);
 			}
 		}
-		// END QUEUE
 		return failed("Tid not found in queue for removal.");
 	}
 }
 
 TCB_t* pop_queue(PFILA2 p_queue) {
 	TCB_t* p_thread;
-	//printf(" codigo NEXTFILA2 : %d\n", NextFila2(p_queue) );
 	if (!is_valid(p_queue))
 		return (null("Invalid priority queue"));
 	else if (is_empty(p_queue)) {
@@ -255,7 +249,6 @@ TCB_t* make_thread(int prio) {
 
 int ccreate (void* (*start)(void*), void *arg, int prio) {
 	init(); // Initializes cthread.
-
 	//Allocate thread data
 	TCB_t* p_thread = make_thread(prio);
 	if(p_thread == NULL)
@@ -314,7 +307,7 @@ int remove_emplace(TCB_t* thread, PFILA2 from_queue, PFILA2 to_queue) {
 		return SUCCESS;
 	}
 	else {
-		return failed("FAILED QUEUE CHANGE at remove_emplace");
+		return failed("ERROR: Failed to switch between state queues.");
 	}
 }
 
@@ -351,15 +344,15 @@ int unblock_current_dormant(int tid) {
 
 	//Swaps blocked thread queue from Q_Blocked to Q_Ready and saves its context
 	if( remove_emplace(p_thread, &Q_Blocked, &Q_Ready) == SUCCESS) {
+		p_thread->state = PROCST_APTO;
 		return SUCCESS;
 	}
 	else return failed("Failed Unblock Dormant");
 }
 
 void terminate_current_thread() {
-	//Stops runninng thread timer
-	t_incumbent->prio = stopTimer();
-
+	t_incumbent->prio = stopTimer(); //Stops running thread timer
+	t_incumbent->state = PROCST_TERMINO;
 	//Wakes up dormant thread, if any
 	if(t_incumbent->dormant!=-1)
 	{
@@ -369,13 +362,11 @@ void terminate_current_thread() {
 			exit(EXIT_FAILURE);
 		}
 	}
-
 	//Remove running thread from Q_Exec
 	if(remove_from_queue(&Q_Exec, t_incumbent->tid) == SUCCESS) {
 
 		free(t_incumbent->context.uc_stack.ss_sp);
 		free(t_incumbent);
-
 		// calls scheduler
 		schedule_next_thread();
 	}
@@ -384,8 +375,6 @@ void terminate_current_thread() {
 		// ABORT. Cannot terminate thread. Q_Exec is empty
 		exit(EXIT_FAILURE);
 	}
-
-
 }
 
 int cpop_ready() {
@@ -584,7 +573,7 @@ int cwait(csem_t *sem) {
 
 				return(schedule_next_thread());
 		}
-		else return(failed("FAILED CWAIT 1"));
+		else return(failed("ERROR: failed to place thread in waiting."));
 	}
 	else {
 		// There was a free spot available for the caller.
