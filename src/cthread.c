@@ -21,9 +21,6 @@ PFILA2	alloc_queue();
 TCB_t*	alloc_thread();
 void	init();
 void	print_queue(PFILA2 p_queue);
-void	print_queue_ready();
-void	print_queue_bloq();
-void	print_queue_exec();
 int		emplace_in_queue(PFILA2, TCB_t*);
 int		remove_from_queue(PFILA2 p_queue, int tid);
 TCB_t*	pop_queue(PFILA2 p_queue);
@@ -34,20 +31,10 @@ int		unschedule_current_thread();
 int		block_current_thread(unsigned int);
 int		unblock_current_dormant(int tid);
 void	terminate_current_thread();
-int		cpop_ready();
-void	cremove_ready(int tid);
 int		being_waited_queue(PFILA2 p_queue, int tid);
 int		being_waited(int tid);
 TCB_t*	search_queue(PFILA2 p_queue, int tid);
 TCB_t*	find(int tid);
-// int	cyield();
-// int	cjoin(int tid);
-int		demote_incumbent_to(int new_state);
-// int	csem_init(csem_t *sem, int count);
-// int	cwait(csem_t *sem);
-// int	csignal(csem_t *sem);
-// int	cidentify (char *name, int size);
-
 
 int lib_initialized = 0;
 
@@ -76,15 +63,15 @@ int is_valid(PFILA2 p_queue) {
 }
 
 int failed(char* msg) {
-	printf("%s\n", msg);
+	//printf("%s\n", msg);
 	return FAILED;
 }
 void print(char* msg) {
-	printf("%s\n", msg);
+	//printf("%s\n", msg);
 }
 
 void* null(char* msg) {
-	printf("%s\n", msg);
+	//printf("%s\n", msg);
 	return (void*)NULL;
 }
 
@@ -99,7 +86,7 @@ TCB_t* alloc_thread() {
 void init() {
 	if (!lib_initialized){
 
-		print("inicializando cthread...");
+		//print("inicializando cthread...");
 
 		Q_Ready		=  *alloc_queue();
 		Q_Blocked	=  *alloc_queue();
@@ -267,7 +254,7 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 	//Insert new thread in the Q_Ready
 	int code = emplace_in_queue(&Q_Ready, p_thread );
 	if(code != SUCCESS) {
-		printf("ERROR: could not insert new thread in ready queue. Freeing thread. \n");
+		//printf("ERROR: could not insert new thread in ready queue. Freeing thread. \n");
 		free(p_thread);
 		return FAILED;
 	}
@@ -278,7 +265,7 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 
 int schedule_next_thread() {
 	//Selects next thread
-	print_queue_ready();
+	//print_queue_ready();
 	t_incumbent = pop_queue(&Q_Ready);
 
 	if(t_incumbent != NULL ) {
@@ -286,8 +273,8 @@ int schedule_next_thread() {
 		if (emplace_in_queue(&Q_Exec, t_incumbent) == SUCCESS) {
 			t_incumbent->state = PROCST_EXEC;
 			//sets next thread's context
-			setcontext(&t_incumbent->context);
 			startTimer();
+			setcontext(&t_incumbent->context);
 			return SUCCESS;
 		}
 		else
@@ -357,7 +344,7 @@ void terminate_current_thread() {
 	{
 		if(unblock_current_dormant(t_incumbent->dormant)==FAILED)
 		{
-			print("Could not wake thread up");
+			//print("Could not wake thread up");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -374,25 +361,6 @@ void terminate_current_thread() {
 		// ABORT. Cannot terminate thread. Q_Exec is empty
 		exit(EXIT_FAILURE);
 	}
-}
-
-int cpop_ready() {
-	TCB_t* thread = pop_queue(&Q_Ready);
-	if (thread != NULL)
-	{
-		print_queue(&Q_Ready);
-		return thread->tid;
-	}
-	else return -1;
-}
-
-void cremove_ready(int tid) {
-	printf("\nCalled removal of tid %d\n",tid);
-	remove_from_queue(&Q_Ready, tid);
-
-	print("Queue after call to remove element: ");
-	print_queue(&Q_Ready);
-	printf("\n");
 }
 
 int being_waited_queue(PFILA2 p_queue, int tid) {
@@ -499,8 +467,6 @@ int cjoin(int tid) {
 
 	unsigned int time_at_call = stopTimer();
 
-	printf("STOP TIMER: %u\n", time_at_call);
-
 	// Incumbent called to wait on thread "tid"
 	TCB_t* awaited = find(tid);
 	if( awaited == NULL) // "tid" does not exist (not found in any queue).
@@ -528,14 +494,14 @@ int csem_init(csem_t *sem, int count) {
 	init(); // Initializes cthread.
 
 	if(sem == NULL){
-		print("ERROR: could not initialize semaphore (invalid pointer).");
+		//print("ERROR: could not initialize semaphore (invalid pointer).");
 		return FAILED;
 	}
 
 	sem->count = count;
 	sem->fila  = alloc_queue();
 	if( CreateFila2(sem->fila) != SUCCESS ) {
-		printf("ERROR: could not create semaphore queue.\n");
+		//printf("ERROR: could not create semaphore queue.\n");
 		free(sem->fila);
 		sem->fila = NULL;
 		return FAILED;
@@ -547,15 +513,12 @@ int csem_init(csem_t *sem, int count) {
 
 int is_valid_semaphore(csem_t* sem) {
 	if (sem == NULL){
-		print("SEMAFORO: PONTEIRO NULO");
 		return 0;
 	}
 	if (sem->fila == NULL){
-		print("SEMAFORO: PONTEIRO DA FILA NULO");
 		return 0;
 	}
 	if (!is_valid(sem->fila)){
-		print("SEMAFORO: QUEUE INVALIDA");
 		return 0;
 	}
 	return 1;
@@ -604,7 +567,6 @@ int csignal(csem_t *sem) {
 		return remove_emplace(p_thread, &Q_Blocked, &Q_Ready);
 	}
 	else {
-		printf("Ninguem tava esperando no semaforo.\n");
 		return SUCCESS;
 	}
 }
