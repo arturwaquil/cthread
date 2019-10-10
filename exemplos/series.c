@@ -27,6 +27,7 @@ void* fatorial(void *i) {
 	fat = n * fat;
 	}
 	printf("Fatorial de %d: %d\n", *(int *)i,fat);
+
 	return NULL;
 }
 
@@ -64,6 +65,8 @@ int main(int argc, char **argv) {
 	vetor[7] = ccreate(fatorial, (void *)&i8, 0);
 	vetor[8] = ccreate(fatorial, (void *)&i9, 0);
 	vetor[9] = ccreate(fatorial, (void *)&i10, 0);
+	printf("Sou a main e quero passar a vez\n");
+	cyield();
 
 	printf("Sou a main e decidi esperar meu primogenito th1mmy\n");
 	cjoin(vetor[0]);
