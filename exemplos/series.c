@@ -8,11 +8,21 @@
 #include "../include/support.h"
 #include "../include/cthread.h"
 #include <stdio.h>
+	int id1, id2, id3, id4, id5, id6, id7, id8, id9, id10;
 
+int* vetor[10];
 
 void* fatorial(void *i) {
 	int fat=1, N, n;
 	N = *(int *)i;
+
+	printf("Sou a thread %d\n",N);
+	if (N < 10) {
+	printf("Thread %d decidiu esperar thread %d\n",N, N+1);
+	cjoin(vetor[N]);
+	printf("Thread %d acordou\n",N);
+
+	}
 	for ( n=N; n > 1; --n){
 	fat = n * fat;
 	}
@@ -41,30 +51,25 @@ void* fibonnaci (void *i) {
 
 int main(int argc, char **argv) {
 
-	int id1, id2, id3, id4, id5, id6, id7, id8, id9, id10;
+
 	int i1=1, i2=2, i3=3, i4=4, i5=5, i6=6, i7=7, i8=8, i9=9, i10=10;
-	
-	id1 = ccreate(fatorial, (void *)&i1, 0);
-	id2 = ccreate(fatorial, (void *)&i2, 0);
-	id3 = ccreate(fatorial, (void *)&i3, 0);
-	id4 = ccreate(fatorial, (void *)&i4, 0);
-	id5 = ccreate(fatorial, (void *)&i5, 0);
-	id6 = ccreate(fatorial, (void *)&i6, 0);
-	id7 = ccreate(fatorial, (void *)&i7, 0);
-	id8 = ccreate(fatorial, (void *)&i8, 0);
-	id9 = ccreate(fatorial, (void *)&i9, 0);
-	id10 = ccreate(fatorial, (void *)&i10, 0);
-	
-	cjoin(id1);
-	cjoin(id2);
-	cjoin(id3);
-	cjoin(id4);
-	cjoin(id5);
-	cjoin(id6);
-	cjoin(id7);
-	cjoin(id8);
-	cjoin(id9);
-	cjoin(id10);
+
+	vetor[0] = ccreate(fatorial, (void *)&i1, 0);
+	vetor[1] = ccreate(fatorial, (void *)&i2, 0);
+	vetor[2] = ccreate(fatorial, (void *)&i3, 0);
+	vetor[3] = ccreate(fatorial, (void *)&i4, 0);
+	vetor[4] = ccreate(fatorial, (void *)&i5, 0);
+	vetor[5] = ccreate(fatorial, (void *)&i6, 0);
+	vetor[6] = ccreate(fatorial, (void *)&i7, 0);
+	vetor[7] = ccreate(fatorial, (void *)&i8, 0);
+	vetor[8] = ccreate(fatorial, (void *)&i9, 0);
+	vetor[9] = ccreate(fatorial, (void *)&i10, 0);
+
+	printf("Sou a main e decidi esperar meu primogenito th1mmy\n");
+	cjoin(vetor[0]);
+printf("Sou a main, th1mmy morreu\n");
+	printf("La fin\n");
+
 
 /*
 	int id0, id1;
@@ -83,4 +88,3 @@ int main(int argc, char **argv) {
 	return 0;
 
 }
-
