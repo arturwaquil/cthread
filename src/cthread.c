@@ -10,6 +10,7 @@
 #define DEFAULT_PRIO 0
 #define SUCCESS 0
 #define FAILED -1
+#define MEM 32000
 
 int		generate_tid();
 int		is_empty(PFILA2);
@@ -104,10 +105,10 @@ void init() {
 		t_main.dormant = -1;
 
 		getcontext(&terminate);
-		char stack[SIGSTKSZ];
+		// char stack[SIGSTKSZ];
 		terminate.uc_link = 0;
-		terminate.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
-		terminate.uc_stack.ss_size = sizeof(stack);
+		terminate.uc_stack.ss_sp = (char*) malloc(MEM);
+		terminate.uc_stack.ss_size = MEM;
 		makecontext(&(terminate), (void (*)(void))terminate_current_thread, 0);
 
 		getcontext(&t_main.context);
@@ -243,12 +244,12 @@ int ccreate (void* (*start)(void*), void *arg, int prio) {
 
 	//Initialize and allocate thread's context
 	p_thread->context.uc_link = &terminate;
-	char stack[SIGSTKSZ];
-	p_thread->context.uc_stack.ss_sp = (char*) malloc(SIGSTKSZ);
+	// char stack[SIGSTKSZ];
+	p_thread->context.uc_stack.ss_sp = (char*) malloc(MEM);
 	if(p_thread->context.uc_stack.ss_sp == NULL)
 		return FAILED;
 
-	p_thread->context.uc_stack.ss_size = sizeof(stack);
+	p_thread->context.uc_stack.ss_size = MEM;
 	makecontext(&(p_thread->context), (void (*)(void))start, 1, arg);
 
 	//Insert new thread in the Q_Ready
@@ -574,7 +575,7 @@ int csignal(csem_t *sem) {
 int cidentify (char *name, int size) {
 	char *nomes = "Artur Waquil Campana\t00287677\nGiovanna Lazzari Miotto\t00207758\nHenrique Chaves Pacheco\t00299902\n\0";
 	if (size < strlen(nomes)) {
-		printf("ERROR: identification requires size %lu or larger.\n", strlen(nomes));
+		printf("ERROR: identification requires size %zu or larger.\n", strlen(nomes));
 		return FAILED;
 	}
 	else strncpy(name, nomes, size);
